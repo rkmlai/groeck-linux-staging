@@ -274,6 +274,7 @@ static const struct of_device_id mpc8xxx_wdt_match[] = {
 		.compatible = "fsl,mpc823-wdt",
 		.data = &(struct mpc8xxx_wdt_type) {
 			.prescaler = 0x800,
+			.hw_enabled = true,
 		},
 	},
 	{},
