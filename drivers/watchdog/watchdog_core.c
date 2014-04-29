@@ -37,11 +37,26 @@
 #include <linux/idr.h>		/* For ida_* macros */
 #include <linux/err.h>		/* For IS_ERR macros */
 #include <linux/of.h>		/* For of_get_timeout_sec */
+#include <linux/spinlock.h>	/* For spinlock */
 
 #include "watchdog_core.h"	/* For watchdog_dev_register/... */
 
 static DEFINE_IDA(watchdog_ida);
 static struct class *watchdog_class;
+
+static DEFINE_SPINLOCK(wdd_reboot_lock);
+static struct watchdog_device *wdd_reboot_dev;
+
+void watchdog_do_reboot(void)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&wdd_reboot_lock, flags);
+	if (wdd_reboot_dev)
+		wdd_reboot_dev->ops->reboot(wdd_reboot_dev);
+	spin_unlock_irqrestore(&wdd_reboot_lock, flags);
+}
+EXPORT_SYMBOL(watchdog_do_reboot);
 
 static void watchdog_check_min_max_timeout(struct watchdog_device *wdd)
 {
@@ -111,6 +126,7 @@ EXPORT_SYMBOL_GPL(watchdog_init_timeout);
 int watchdog_register_device(struct watchdog_device *wdd)
 {
 	int ret, id, devno;
+	unsigned long flags;
 
 	if (wdd == NULL || wdd->info == NULL || wdd->ops == NULL)
 		return -EINVAL;
@@ -162,6 +178,11 @@ int watchdog_register_device(struct watchdog_device *wdd)
 		return ret;
 	}
 
+	spin_lock_irqsave(&wdd_reboot_lock, flags);
+	if (wdd->ops->reboot && !wdd_reboot_dev)
+		wdd_reboot_dev = wdd;
+	spin_unlock_irqrestore(&wdd_reboot_lock, flags);
+
 	return 0;
 }
 EXPORT_SYMBOL_GPL(watchdog_register_device);
@@ -177,9 +198,15 @@ void watchdog_unregister_device(struct watchdog_device *wdd)
 {
 	int ret;
 	int devno;
+	unsigned long flags;
 
 	if (wdd == NULL)
 		return;
+
+	spin_lock_irqsave(&wdd_reboot_lock, flags);
+	if (wdd == wdd_reboot_dev)
+		wdd_reboot_dev = NULL;
+	spin_unlock_irqrestore(&wdd_reboot_lock, flags);
 
 	devno = wdd->cdev.dev;
 	ret = watchdog_dev_unregister(wdd);
