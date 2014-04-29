@@ -23,11 +23,8 @@
 #include <linux/moduleparam.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
-#include <linux/reboot.h>
 #include <linux/types.h>
 #include <linux/watchdog.h>
-
-#include <asm/system_misc.h>
 
 #define WDT_MAX_TIMEOUT         16
 #define WDT_MIN_TIMEOUT         1
@@ -74,23 +71,24 @@ static const int wdt_timeout_map[] = {
 	[16] = 0xB, /* 16s */
 };
 
-static void __iomem *reboot_wdt_base;
-
-static void sun4i_wdt_restart(enum reboot_mode mode, const char *cmd)
+static void sunxi_wdt_reboot(struct watchdog_device *wdt_dev)
 {
+	struct sunxi_wdt_dev *sunxi_wdt = watchdog_get_drvdata(wdt_dev);
+
 	/* Enable timer and set reset bit in the watchdog */
-	writel(WDT_MODE_EN | WDT_MODE_RST_EN, reboot_wdt_base + WDT_MODE);
+	writel(WDT_MODE_EN | WDT_MODE_RST_EN,
+	       sunxi_wdt->wdt_base + WDT_MODE);
 
 	/*
 	 * Restart the watchdog. The default (and lowest) interval
 	 * value for the watchdog is 0.5s.
 	 */
-	writel(WDT_CTRL_RELOAD, reboot_wdt_base + WDT_CTRL);
+	writel(WDT_CTRL_RELOAD, sunxi_wdt->wdt_base + WDT_CTRL);
 
 	while (1) {
 		mdelay(5);
 		writel(WDT_MODE_EN | WDT_MODE_RST_EN,
-		       reboot_wdt_base + WDT_MODE);
+		       sunxi_wdt->wdt_base + WDT_MODE);
 	}
 }
 
@@ -167,6 +165,7 @@ static const struct watchdog_ops sunxi_wdt_ops = {
 	.start		= sunxi_wdt_start,
 	.stop		= sunxi_wdt_stop,
 	.ping		= sunxi_wdt_ping,
+	.reboot		= sunxi_wdt_reboot,
 	.set_timeout	= sunxi_wdt_set_timeout,
 };
 
@@ -205,9 +204,6 @@ static int sunxi_wdt_probe(struct platform_device *pdev)
 	if (unlikely(err))
 		return err;
 
-	reboot_wdt_base = sunxi_wdt->wdt_base;
-	arm_pm_restart = sun4i_wdt_restart;
-
 	dev_info(&pdev->dev, "Watchdog enabled (timeout=%d sec, nowayout=%d)",
 			sunxi_wdt->wdt_dev.timeout, nowayout);
 
@@ -217,8 +213,6 @@ static int sunxi_wdt_probe(struct platform_device *pdev)
 static int sunxi_wdt_remove(struct platform_device *pdev)
 {
 	struct sunxi_wdt_dev *sunxi_wdt = platform_get_drvdata(pdev);
-
-	arm_pm_restart = NULL;
 
 	watchdog_unregister_device(&sunxi_wdt->wdt_dev);
 	watchdog_set_drvdata(&sunxi_wdt->wdt_dev, NULL);
