@@ -90,6 +90,7 @@ struct watchdog_ops {
 	int (*stop)(struct watchdog_device *);
 	/* optional operations */
 	int (*ping)(struct watchdog_device *);
+	void (*reboot)(struct watchdog_device *);
 	unsigned int (*status)(struct watchdog_device *);
 	int (*set_timeout)(struct watchdog_device *, unsigned int);
 	unsigned int (*get_timeleft)(struct watchdog_device *);
@@ -148,6 +149,8 @@ they are supported. These optional routines/operations are:
   info structure).
 * status: this routine checks the status of the watchdog timer device. The
   status of the device is reported with watchdog WDIOF_* status flags/bits.
+* reboot: if this routine is present, it may be called to reboot the system.
+  Parameter is the pointer to the watchdog device.
 * set_timeout: this routine checks and changes the timeout of the watchdog
   timer device. It returns 0 on success, -EINVAL for "parameter out of range"
   and -EIO for "could not write value to the watchdog". On success this
@@ -224,3 +227,11 @@ the device tree (if the module timeout parameter is invalid). Best practice is
 to set the default timeout value as timeout value in the watchdog_device and
 then use this function to set the user "preferred" timeout value.
 This routine returns zero on success and a negative errno code for failure.
+
+The watchdog_do_reboot function can be used to reboot the system. This is
+intended to be used in systems which do not have an explicit reboot capability,
+but implement reboot by programming the watchdog to expire immediately. If
+the function is called, and a watchdog driver with reboot functionality was
+previously registered, the reboot function of that driver will be called.
+Architecture code should call watchdog_do_reboot from its machine_reboot
+function after other means to reboot the system failed.
