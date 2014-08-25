@@ -6,8 +6,8 @@ Required properties:
 - interrupts : Should contain WDT interrupt
 
 Optional property:
-- big-endian: If present the watchdog device's registers are implemented
-  in big endian mode, otherwise in little mode.
+- big-endian: Boolean property, required if all the i.MX WDT registers
+  are big-endian rather than little-endian.
 
 Examples:
 
