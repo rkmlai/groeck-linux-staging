@@ -138,7 +138,7 @@ static int ep93xx_wdt_probe(struct platform_device *pdev)
 
 	setup_timer(&timer, ep93xx_wdt_timer_ping, 1);
 
-	err = watchdog_register_device(&ep93xx_wdt_wdd);
+	err = devm_watchdog_register_device(&pdev->dev, &ep93xx_wdt_wdd);
 	if (err)
 		return err;
 
@@ -149,18 +149,11 @@ static int ep93xx_wdt_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int ep93xx_wdt_remove(struct platform_device *pdev)
-{
-	watchdog_unregister_device(&ep93xx_wdt_wdd);
-	return 0;
-}
-
 static struct platform_driver ep93xx_wdt_driver = {
 	.driver		= {
 		.name	= "ep93xx-wdt",
 	},
 	.probe		= ep93xx_wdt_probe,
-	.remove		= ep93xx_wdt_remove,
 };
 
 module_platform_driver(ep93xx_wdt_driver);
