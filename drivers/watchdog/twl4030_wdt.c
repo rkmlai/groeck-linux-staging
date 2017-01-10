@@ -70,7 +70,6 @@ static const struct watchdog_ops twl4030_wdt_ops = {
 
 static int twl4030_wdt_probe(struct platform_device *pdev)
 {
-	int ret = 0;
 	struct watchdog_device *wdt;
 
 	wdt = devm_kzalloc(&pdev->dev, sizeof(*wdt), GFP_KERNEL);
@@ -90,20 +89,7 @@ static int twl4030_wdt_probe(struct platform_device *pdev)
 
 	twl4030_wdt_stop(wdt);
 
-	ret = watchdog_register_device(wdt);
-	if (ret)
-		return ret;
-
-	return 0;
-}
-
-static int twl4030_wdt_remove(struct platform_device *pdev)
-{
-	struct watchdog_device *wdt = platform_get_drvdata(pdev);
-
-	watchdog_unregister_device(wdt);
-
-	return 0;
+	return devm_watchdog_register_device(&pdev->dev, wdt);
 }
 
 #ifdef CONFIG_PM
@@ -137,7 +123,6 @@ MODULE_DEVICE_TABLE(of, twl_wdt_of_match);
 
 static struct platform_driver twl4030_wdt_driver = {
 	.probe		= twl4030_wdt_probe,
-	.remove		= twl4030_wdt_remove,
 	.suspend	= twl4030_wdt_suspend,
 	.resume		= twl4030_wdt_resume,
 	.driver		= {
