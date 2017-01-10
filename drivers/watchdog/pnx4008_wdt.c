@@ -202,6 +202,11 @@ static int pnx4008_wdt_probe(struct platform_device *pdev)
 	ret = clk_prepare_enable(wdt_clk);
 	if (ret)
 		return ret;
+	ret = devm_add_action_or_reset(&pdev->dev,
+				       (void(*)(void *))clk_disable_unprepare,
+				       wdt_clk);
+	if (ret)
+		return ret;
 
 	pnx4008_wdd.bootstatus = (readl(WDTIM_RES(wdt_base)) & WDOG_RESET) ?
 			WDIOF_CARDRESET : 0;
@@ -211,26 +216,13 @@ static int pnx4008_wdt_probe(struct platform_device *pdev)
 
 	pnx4008_wdt_stop(&pnx4008_wdd);	/* disable for now */
 
-	ret = watchdog_register_device(&pnx4008_wdd);
+	ret = devm_watchdog_register_device(&pdev->dev, &pnx4008_wdd);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "cannot register watchdog device\n");
-		goto disable_clk;
+		return ret;
 	}
 
 	dev_info(&pdev->dev, "heartbeat %d sec\n", pnx4008_wdd.timeout);
-
-	return 0;
-
-disable_clk:
-	clk_disable_unprepare(wdt_clk);
-	return ret;
-}
-
-static int pnx4008_wdt_remove(struct platform_device *pdev)
-{
-	watchdog_unregister_device(&pnx4008_wdd);
-
-	clk_disable_unprepare(wdt_clk);
 
 	return 0;
 }
@@ -249,7 +241,6 @@ static struct platform_driver platform_wdt_driver = {
 		.of_match_table = of_match_ptr(pnx4008_wdt_match),
 	},
 	.probe = pnx4008_wdt_probe,
-	.remove = pnx4008_wdt_remove,
 };
 
 module_platform_driver(platform_wdt_driver);
