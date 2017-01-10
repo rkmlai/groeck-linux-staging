@@ -99,7 +99,7 @@ static int stmp3xxx_wdt_probe(struct platform_device *pdev)
 	stmp3xxx_wdd.timeout = clamp_t(unsigned, heartbeat, 1, STMP3XXX_MAX_TIMEOUT);
 	stmp3xxx_wdd.parent = &pdev->dev;
 
-	ret = watchdog_register_device(&stmp3xxx_wdd);
+	ret = devm_watchdog_register_device(&pdev->dev, &stmp3xxx_wdd);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "cannot register watchdog device\n");
 		return ret;
@@ -116,7 +116,6 @@ static int stmp3xxx_wdt_probe(struct platform_device *pdev)
 static int stmp3xxx_wdt_remove(struct platform_device *pdev)
 {
 	unregister_reboot_notifier(&wdt_notifier);
-	watchdog_unregister_device(&stmp3xxx_wdd);
 	return 0;
 }
 
