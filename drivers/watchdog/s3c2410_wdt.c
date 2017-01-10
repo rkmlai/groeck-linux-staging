@@ -430,7 +430,7 @@ static int s3c2410wdt_cpufreq_transition(struct notifier_block *nb,
 	struct s3c2410_wdt *wdt = freq_to_wdt(nb);
 
 	if (!s3c2410wdt_is_running(wdt))
-		goto done;
+		return 0;
 
 	if (val == CPUFREQ_PRECHANGE) {
 		/* To ensure that over the change we don't cause the
@@ -451,7 +451,6 @@ static int s3c2410wdt_cpufreq_transition(struct notifier_block *nb,
 			goto err;
 	}
 
-done:
 	return 0;
 
  err:
@@ -554,25 +553,21 @@ static int s3c2410wdt_probe(struct platform_device *pdev)
 	wdt_irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
 	if (wdt_irq == NULL) {
 		dev_err(dev, "no irq resource specified\n");
-		ret = -ENOENT;
-		goto err;
+		return -ENOENT;
 	}
 
 	/* get the memory region for the watchdog timer */
 	wdt_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	wdt->reg_base = devm_ioremap_resource(dev, wdt_mem);
-	if (IS_ERR(wdt->reg_base)) {
-		ret = PTR_ERR(wdt->reg_base);
-		goto err;
-	}
+	if (IS_ERR(wdt->reg_base))
+		return PTR_ERR(wdt->reg_base);
 
 	DBG("probe: mapped reg_base=%p\n", wdt->reg_base);
 
 	wdt->clock = devm_clk_get(dev, "watchdog");
 	if (IS_ERR(wdt->clock)) {
 		dev_err(dev, "failed to find watchdog clock source\n");
-		ret = PTR_ERR(wdt->clock);
-		goto err;
+		return PTR_ERR(wdt->clock);
 	}
 
 	ret = clk_prepare_enable(wdt->clock);
@@ -580,6 +575,11 @@ static int s3c2410wdt_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to enable clock\n");
 		return ret;
 	}
+	ret = devm_add_action_or_reset(dev,
+				       (void(*)(void *))clk_disable_unprepare,
+				       wdt->clock);
+	if (ret)
+		return ret;
 
 	wdt->wdt_device.min_timeout = 1;
 	wdt->wdt_device.max_timeout = s3c2410wdt_max_timeout(wdt->clock);
@@ -587,7 +587,7 @@ static int s3c2410wdt_probe(struct platform_device *pdev)
 	ret = s3c2410wdt_cpufreq_register(wdt);
 	if (ret < 0) {
 		dev_err(dev, "failed to register cpufreq\n");
-		goto err_clk;
+		return ret;
 	}
 
 	watchdog_set_drvdata(&wdt->wdt_device, wdt);
@@ -624,7 +624,8 @@ static int s3c2410wdt_probe(struct platform_device *pdev)
 	wdt->wdt_device.bootstatus = s3c2410wdt_get_bootstatus(wdt);
 	wdt->wdt_device.parent = &pdev->dev;
 
-	ret = watchdog_register_device(&wdt->wdt_device);
+	watchdog_stop_on_reboot(&wdt->wdt_device);
+	ret = devm_watchdog_register_device(&pdev->dev, &wdt->wdt_device);
 	if (ret) {
 		dev_err(dev, "cannot register watchdog (%d)\n", ret);
 		goto err_cpufreq;
@@ -632,7 +633,7 @@ static int s3c2410wdt_probe(struct platform_device *pdev)
 
 	ret = s3c2410wdt_mask_and_disable_reset(wdt, false);
 	if (ret < 0)
-		goto err_unregister;
+		goto err_cpufreq;
 
 	if (tmr_atboot && started == 0) {
 		dev_info(dev, "starting watchdog timer\n");
@@ -658,16 +659,9 @@ static int s3c2410wdt_probe(struct platform_device *pdev)
 
 	return 0;
 
- err_unregister:
-	watchdog_unregister_device(&wdt->wdt_device);
-
  err_cpufreq:
 	s3c2410wdt_cpufreq_deregister(wdt);
 
- err_clk:
-	clk_disable_unprepare(wdt->clock);
-
- err:
 	return ret;
 }
 
@@ -680,22 +674,9 @@ static int s3c2410wdt_remove(struct platform_device *dev)
 	if (ret < 0)
 		return ret;
 
-	watchdog_unregister_device(&wdt->wdt_device);
-
 	s3c2410wdt_cpufreq_deregister(wdt);
 
-	clk_disable_unprepare(wdt->clock);
-
 	return 0;
-}
-
-static void s3c2410wdt_shutdown(struct platform_device *dev)
-{
-	struct s3c2410_wdt *wdt = platform_get_drvdata(dev);
-
-	s3c2410wdt_mask_and_disable_reset(wdt, true);
-
-	s3c2410wdt_stop(&wdt->wdt_device);
 }
 
 #ifdef CONFIG_PM_SLEEP
@@ -746,7 +727,6 @@ static SIMPLE_DEV_PM_OPS(s3c2410wdt_pm_ops, s3c2410wdt_suspend,
 static struct platform_driver s3c2410wdt_driver = {
 	.probe		= s3c2410wdt_probe,
 	.remove		= s3c2410wdt_remove,
-	.shutdown	= s3c2410wdt_shutdown,
 	.id_table	= s3c2410_wdt_ids,
 	.driver		= {
 		.name	= "s3c2410-wdt",
