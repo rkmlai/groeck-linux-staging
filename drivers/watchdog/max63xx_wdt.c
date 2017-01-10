@@ -225,7 +225,6 @@ static int max63xx_wdt_probe(struct platform_device *pdev)
 	if (err)
 		return err;
 
-	platform_set_drvdata(pdev, &wdt->wdd);
 	watchdog_set_drvdata(&wdt->wdd, wdt);
 
 	wdt->wdd.parent = &pdev->dev;
@@ -235,20 +234,12 @@ static int max63xx_wdt_probe(struct platform_device *pdev)
 
 	watchdog_set_nowayout(&wdt->wdd, nowayout);
 
-	err = watchdog_register_device(&wdt->wdd);
+	err = devm_watchdog_register_device(&pdev->dev, &wdt->wdd);
 	if (err)
 		return err;
 
 	dev_info(&pdev->dev, "using %ds heartbeat with %ds initial delay\n",
 		 wdt->timeout->twd, wdt->timeout->tdelay);
-	return 0;
-}
-
-static int max63xx_wdt_remove(struct platform_device *pdev)
-{
-	struct watchdog_device *wdd = platform_get_drvdata(pdev);
-
-	watchdog_unregister_device(wdd);
 	return 0;
 }
 
@@ -265,7 +256,6 @@ MODULE_DEVICE_TABLE(platform, max63xx_id_table);
 
 static struct platform_driver max63xx_wdt_driver = {
 	.probe		= max63xx_wdt_probe,
-	.remove		= max63xx_wdt_remove,
 	.id_table	= max63xx_id_table,
 	.driver		= {
 		.name	= "max63xx_wdt",
