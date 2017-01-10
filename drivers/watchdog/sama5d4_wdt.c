@@ -234,7 +234,7 @@ static int sama5d4_wdt_probe(struct platform_device *pdev)
 
 	watchdog_set_nowayout(wdd, nowayout);
 
-	ret = watchdog_register_device(wdd);
+	ret = devm_watchdog_register_device(&pdev->dev, wdd);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to register watchdog device\n");
 		return ret;
@@ -253,8 +253,6 @@ static int sama5d4_wdt_remove(struct platform_device *pdev)
 	struct sama5d4_wdt *wdt = platform_get_drvdata(pdev);
 
 	sama5d4_wdt_stop(&wdt->wdd);
-
-	watchdog_unregister_device(&wdt->wdd);
 
 	return 0;
 }
