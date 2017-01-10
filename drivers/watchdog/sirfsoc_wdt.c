@@ -161,7 +161,8 @@ static int sirfsoc_wdt_probe(struct platform_device *pdev)
 	watchdog_set_nowayout(&sirfsoc_wdd, nowayout);
 	sirfsoc_wdd.parent = &pdev->dev;
 
-	ret = watchdog_register_device(&sirfsoc_wdd);
+	watchdog_stop_on_reboot(&sirfsoc_wdd);
+	ret = devm_watchdog_register_device(&pdev->dev, &sirfsoc_wdd);
 	if (ret)
 		return ret;
 
@@ -170,16 +171,9 @@ static int sirfsoc_wdt_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static void sirfsoc_wdt_shutdown(struct platform_device *pdev)
-{
-	struct watchdog_device *wdd = platform_get_drvdata(pdev);
-
-	sirfsoc_wdt_disable(wdd);
-}
-
 static int sirfsoc_wdt_remove(struct platform_device *pdev)
 {
-	sirfsoc_wdt_shutdown(pdev);
+	sirfsoc_wdt_disable(platform_get_drvdata(pdev));
 	return 0;
 }
 
@@ -221,7 +215,6 @@ static struct platform_driver sirfsoc_wdt_driver = {
 	},
 	.probe = sirfsoc_wdt_probe,
 	.remove = sirfsoc_wdt_remove,
-	.shutdown = sirfsoc_wdt_shutdown,
 };
 module_platform_driver(sirfsoc_wdt_driver);
 
