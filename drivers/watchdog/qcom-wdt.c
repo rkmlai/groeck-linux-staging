@@ -185,6 +185,11 @@ static int qcom_wdt_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to setup clock\n");
 		return ret;
 	}
+	ret = devm_add_action_or_reset(&pdev->dev,
+				       (void(*)(void *))clk_disable_unprepare,
+				       wdt->clk);
+	if (ret)
+		return ret;
 
 	/*
 	 * We use the clock rate to calculate the max timeout, so ensure it's
@@ -198,8 +203,7 @@ static int qcom_wdt_probe(struct platform_device *pdev)
 	if (wdt->rate == 0 ||
 	    wdt->rate > 0x10000000U) {
 		dev_err(&pdev->dev, "invalid clock rate\n");
-		ret = -EINVAL;
-		goto err_clk_unprepare;
+		return -EINVAL;
 	}
 
 	wdt->wdd.info = &qcom_wdt_info;
@@ -220,26 +224,12 @@ static int qcom_wdt_probe(struct platform_device *pdev)
 	wdt->wdd.timeout = min(wdt->wdd.max_timeout, 30U);
 	watchdog_init_timeout(&wdt->wdd, 0, &pdev->dev);
 
-	ret = watchdog_register_device(&wdt->wdd);
+	ret = devm_watchdog_register_device(&pdev->dev, &wdt->wdd);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to register watchdog\n");
-		goto err_clk_unprepare;
+		return ret;
 	}
 
-	platform_set_drvdata(pdev, wdt);
-	return 0;
-
-err_clk_unprepare:
-	clk_disable_unprepare(wdt->clk);
-	return ret;
-}
-
-static int qcom_wdt_remove(struct platform_device *pdev)
-{
-	struct qcom_wdt *wdt = platform_get_drvdata(pdev);
-
-	watchdog_unregister_device(&wdt->wdd);
-	clk_disable_unprepare(wdt->clk);
 	return 0;
 }
 
@@ -253,7 +243,6 @@ MODULE_DEVICE_TABLE(of, qcom_wdt_of_table);
 
 static struct platform_driver qcom_watchdog_driver = {
 	.probe	= qcom_wdt_probe,
-	.remove	= qcom_wdt_remove,
 	.driver	= {
 		.name		= KBUILD_MODNAME,
 		.of_match_table	= qcom_wdt_of_table,
