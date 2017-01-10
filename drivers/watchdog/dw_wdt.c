@@ -227,12 +227,15 @@ static int dw_wdt_drv_probe(struct platform_device *pdev)
 	ret = clk_prepare_enable(dw_wdt->clk);
 	if (ret)
 		return ret;
+	ret = devm_add_action_or_reset(dev,
+				       (void(*)(void *))clk_disable_unprepare,
+				       dw_wdt->clk);
+	if (ret)
+		return ret;
 
 	dw_wdt->rate = clk_get_rate(dw_wdt->clk);
-	if (dw_wdt->rate == 0) {
-		ret = -EINVAL;
-		goto out_disable_clk;
-	}
+	if (dw_wdt->rate == 0)
+		return -EINVAL;
 
 	wdd = &dw_wdt->wdd;
 	wdd->info = &dw_wdt_ident;
@@ -263,25 +266,7 @@ static int dw_wdt_drv_probe(struct platform_device *pdev)
 
 	watchdog_set_restart_priority(wdd, 128);
 
-	ret = watchdog_register_device(wdd);
-	if (ret)
-		goto out_disable_clk;
-
-	return 0;
-
-out_disable_clk:
-	clk_disable_unprepare(dw_wdt->clk);
-	return ret;
-}
-
-static int dw_wdt_drv_remove(struct platform_device *pdev)
-{
-	struct dw_wdt *dw_wdt = platform_get_drvdata(pdev);
-
-	watchdog_unregister_device(&dw_wdt->wdd);
-	clk_disable_unprepare(dw_wdt->clk);
-
-	return 0;
+	return devm_watchdog_register_device(dev, wdd);
 }
 
 #ifdef CONFIG_OF
@@ -294,7 +279,6 @@ MODULE_DEVICE_TABLE(of, dw_wdt_of_match);
 
 static struct platform_driver dw_wdt_driver = {
 	.probe		= dw_wdt_drv_probe,
-	.remove		= dw_wdt_drv_remove,
 	.driver		= {
 		.name	= "dw_wdt",
 		.of_match_table = of_match_ptr(dw_wdt_of_match),
