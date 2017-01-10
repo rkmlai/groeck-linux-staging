@@ -155,25 +155,13 @@ static int menf21bmc_wdt_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	ret = watchdog_register_device(&drv_data->wdt);
+	ret = devm_watchdog_register_device(&pdev->dev, &drv_data->wdt);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to register Watchdog device\n");
 		return ret;
 	}
 
 	dev_info(&pdev->dev, "MEN 14F021P00 BMC Watchdog device enabled\n");
-
-	return 0;
-}
-
-static int menf21bmc_wdt_remove(struct platform_device *pdev)
-{
-	struct menf21bmc_wdt *drv_data = platform_get_drvdata(pdev);
-
-	dev_warn(&pdev->dev,
-		 "Unregister MEN 14F021P00 BMC Watchdog device, board may reset\n");
-
-	watchdog_unregister_device(&drv_data->wdt);
 
 	return 0;
 }
@@ -191,7 +179,6 @@ static struct  platform_driver menf21bmc_wdt = {
 		.name	= DEVNAME,
 	},
 	.probe		= menf21bmc_wdt_probe,
-	.remove		= menf21bmc_wdt_remove,
 	.shutdown	= menf21bmc_wdt_shutdown,
 };
 
