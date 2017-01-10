@@ -137,7 +137,7 @@ static int retu_wdt_probe(struct platform_device *pdev)
 
 	INIT_DELAYED_WORK(&wdev->ping_work, retu_wdt_ping_work);
 
-	ret = watchdog_register_device(retu_wdt);
+	ret = devm_watchdog_register_device(&pdev->dev, retu_wdt);
 	if (ret < 0)
 		return ret;
 
@@ -156,7 +156,6 @@ static int retu_wdt_remove(struct platform_device *pdev)
 	struct watchdog_device *wdog = platform_get_drvdata(pdev);
 	struct retu_wdt_dev *wdev = watchdog_get_drvdata(wdog);
 
-	watchdog_unregister_device(wdog);
 	cancel_delayed_work_sync(&wdev->ping_work);
 
 	return 0;
