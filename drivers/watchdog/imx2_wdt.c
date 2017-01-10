@@ -287,6 +287,11 @@ static int __init imx2_wdt_probe(struct platform_device *pdev)
 	ret = clk_prepare_enable(wdev->clk);
 	if (ret)
 		return ret;
+	ret = devm_add_action_or_reset(&pdev->dev,
+				       (void(*)(void *))clk_disable_unprepare,
+				       wdev->clk);
+	if (ret)
+		return ret;
 
 	regmap_read(wdev->regmap, IMX2_WDT_WRSR, &val);
 	wdog->bootstatus = val & IMX2_WDT_WRSR_TOUT ? WDIOF_CARDRESET : 0;
@@ -316,28 +321,22 @@ static int __init imx2_wdt_probe(struct platform_device *pdev)
 	 */
 	regmap_write(wdev->regmap, IMX2_WDT_WMCR, 0);
 
-	ret = watchdog_register_device(wdog);
+	ret = devm_watchdog_register_device(&pdev->dev, wdog);
 	if (ret) {
 		dev_err(&pdev->dev, "cannot register watchdog device\n");
-		goto disable_clk;
+		return ret;
 	}
 
 	dev_info(&pdev->dev, "timeout %d sec (nowayout=%d)\n",
 		 wdog->timeout, nowayout);
 
 	return 0;
-
-disable_clk:
-	clk_disable_unprepare(wdev->clk);
-	return ret;
 }
 
 static int __exit imx2_wdt_remove(struct platform_device *pdev)
 {
 	struct watchdog_device *wdog = platform_get_drvdata(pdev);
 	struct imx2_wdt_device *wdev = watchdog_get_drvdata(wdog);
-
-	watchdog_unregister_device(wdog);
 
 	if (imx2_wdt_is_running(wdev)) {
 		imx2_wdt_ping(wdog);
