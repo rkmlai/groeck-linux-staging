@@ -186,7 +186,7 @@ static int mpc8xxx_wdt_probe(struct platform_device *ofdev)
 
 	watchdog_set_nowayout(&ddata->wdd, nowayout);
 
-	ret = watchdog_register_device(&ddata->wdd);
+	ret = devm_watchdog_register_device(&ofdev->dev, &ddata->wdd);
 	if (ret) {
 		pr_err("cannot register watchdog device (err=%d)\n", ret);
 		return ret;
@@ -214,7 +214,6 @@ static int mpc8xxx_wdt_remove(struct platform_device *ofdev)
 	pr_crit("Watchdog removed, expect the %s soon!\n",
 		reset ? "reset" : "machine check exception");
 	del_timer_sync(&ddata->timer);
-	watchdog_unregister_device(&ddata->wdd);
 
 	return 0;
 }
