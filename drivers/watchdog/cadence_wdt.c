@@ -340,8 +340,7 @@ static int cdns_wdt_probe(struct platform_device *pdev)
 	wdt->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(wdt->clk)) {
 		dev_err(&pdev->dev, "input clock not found\n");
-		ret = PTR_ERR(wdt->clk);
-		return ret;
+		return PTR_ERR(wdt->clk);
 	}
 
 	ret = clk_prepare_enable(wdt->clk);
@@ -349,6 +348,11 @@ static int cdns_wdt_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "unable to enable clock\n");
 		return ret;
 	}
+	ret = devm_add_action_or_reset(&pdev->dev,
+				       (void(*)(void *))clk_disable_unprepare,
+				       wdt->clk);
+	if (ret)
+		return ret;
 
 	clock_f = clk_get_rate(wdt->clk);
 	if (clock_f <= CDNS_WDT_CLK_75MHZ) {
@@ -361,10 +365,11 @@ static int cdns_wdt_probe(struct platform_device *pdev)
 
 	spin_lock_init(&wdt->io_lock);
 
-	ret = watchdog_register_device(cdns_wdt_device);
+	watchdog_stop_on_reboot(cdns_wdt_device);
+	ret = devm_watchdog_register_device(&pdev->dev, cdns_wdt_device);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to register wdt device\n");
-		goto err_clk_disable;
+		return ret;
 	}
 	platform_set_drvdata(pdev, wdt);
 
@@ -373,11 +378,6 @@ static int cdns_wdt_probe(struct platform_device *pdev)
 		 nowayout ? ", nowayout" : "");
 
 	return 0;
-
-err_clk_disable:
-	clk_disable_unprepare(wdt->clk);
-
-	return ret;
 }
 
 /**
@@ -393,24 +393,8 @@ static int cdns_wdt_remove(struct platform_device *pdev)
 	struct cdns_wdt *wdt = platform_get_drvdata(pdev);
 
 	cdns_wdt_stop(&wdt->cdns_wdt_device);
-	watchdog_unregister_device(&wdt->cdns_wdt_device);
-	clk_disable_unprepare(wdt->clk);
 
 	return 0;
-}
-
-/**
- * cdns_wdt_shutdown - Stop the device.
- *
- * @pdev: handle to the platform structure.
- *
- */
-static void cdns_wdt_shutdown(struct platform_device *pdev)
-{
-	struct cdns_wdt *wdt = platform_get_drvdata(pdev);
-
-	cdns_wdt_stop(&wdt->cdns_wdt_device);
-	clk_disable_unprepare(wdt->clk);
 }
 
 /**
@@ -468,7 +452,6 @@ MODULE_DEVICE_TABLE(of, cdns_wdt_of_match);
 static struct platform_driver cdns_wdt_driver = {
 	.probe		= cdns_wdt_probe,
 	.remove		= cdns_wdt_remove,
-	.shutdown	= cdns_wdt_shutdown,
 	.driver		= {
 		.name	= "cdns-wdt",
 		.of_match_table = cdns_wdt_of_match,
