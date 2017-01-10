@@ -241,11 +241,7 @@ static struct watchdog_device coh901327_wdt = {
 
 static int __exit coh901327_remove(struct platform_device *pdev)
 {
-	watchdog_unregister_device(&coh901327_wdt);
 	coh901327_disable();
-	free_irq(irq, pdev);
-	clk_disable_unprepare(clk);
-	clk_put(clk);
 	return 0;
 }
 
@@ -263,7 +259,7 @@ static int __init coh901327_probe(struct platform_device *pdev)
 	if (IS_ERR(virtbase))
 		return PTR_ERR(virtbase);
 
-	clk = clk_get(dev, NULL);
+	clk = devm_clk_get(dev, NULL);
 	if (IS_ERR(clk)) {
 		ret = PTR_ERR(clk);
 		dev_err(dev, "could not get clock\n");
@@ -272,8 +268,13 @@ static int __init coh901327_probe(struct platform_device *pdev)
 	ret = clk_prepare_enable(clk);
 	if (ret) {
 		dev_err(dev, "could not prepare and enable clock\n");
-		goto out_no_clk_enable;
+		return ret;
 	}
+	ret = devm_add_action_or_reset(dev,
+				       (void(*)(void *))clk_disable_unprepare,
+				       clk);
+	if (ret)
+		return ret;
 
 	val = readw(virtbase + U300_WDOG_SR);
 	switch (val) {
@@ -309,31 +310,21 @@ static int __init coh901327_probe(struct platform_device *pdev)
 	writew(U300_WDOG_SR_RESET_STATUS_RESET, virtbase + U300_WDOG_SR);
 
 	irq = platform_get_irq(pdev, 0);
-	if (request_irq(irq, coh901327_interrupt, 0,
-			DRV_NAME " Bark", pdev)) {
-		ret = -EIO;
-		goto out_no_irq;
-	}
+	if (devm_request_irq(dev, irq, coh901327_interrupt, 0,
+			     DRV_NAME " Bark", pdev))
+		return -EIO;
 
 	ret = watchdog_init_timeout(&coh901327_wdt, margin, dev);
 	if (ret < 0)
 		coh901327_wdt.timeout = 60;
 
 	coh901327_wdt.parent = dev;
-	ret = watchdog_register_device(&coh901327_wdt);
+	ret = devm_watchdog_register_device(dev, &coh901327_wdt);
 	if (ret)
-		goto out_no_wdog;
+		return ret;
 
 	dev_info(dev, "initialized. timer margin=%d sec\n", margin);
 	return 0;
-
-out_no_wdog:
-	free_irq(irq, pdev);
-out_no_irq:
-	clk_disable_unprepare(clk);
-out_no_clk_enable:
-	clk_put(clk);
-	return ret;
 }
 
 #ifdef CONFIG_PM
