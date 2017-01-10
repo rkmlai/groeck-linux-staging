@@ -203,7 +203,14 @@ static int meson_gxbb_wdt_probe(struct platform_device *pdev)
 	if (IS_ERR(data->clk))
 		return PTR_ERR(data->clk);
 
-	clk_prepare_enable(data->clk);
+	ret = clk_prepare_enable(data->clk);
+	if (ret)
+		return ret;
+	ret = devm_add_action_or_reset(&pdev->dev,
+				       (void(*)(void *))clk_disable_unprepare,
+				       data->clk);
+	if (ret)
+		return ret;
 
 	platform_set_drvdata(pdev, data);
 
@@ -224,37 +231,12 @@ static int meson_gxbb_wdt_probe(struct platform_device *pdev)
 
 	meson_gxbb_wdt_set_timeout(&data->wdt_dev, data->wdt_dev.timeout);
 
-	ret = watchdog_register_device(&data->wdt_dev);
-	if (ret) {
-		clk_disable_unprepare(data->clk);
-		return ret;
-	}
-
-	return 0;
-}
-
-static int meson_gxbb_wdt_remove(struct platform_device *pdev)
-{
-	struct meson_gxbb_wdt *data = platform_get_drvdata(pdev);
-
-	watchdog_unregister_device(&data->wdt_dev);
-
-	clk_disable_unprepare(data->clk);
-
-	return 0;
-}
-
-static void meson_gxbb_wdt_shutdown(struct platform_device *pdev)
-{
-	struct meson_gxbb_wdt *data = platform_get_drvdata(pdev);
-
-	meson_gxbb_wdt_stop(&data->wdt_dev);
+	watchdog_stop_on_reboot(&data->wdt_dev);
+	return devm_watchdog_register_device(&pdev->dev, &data->wdt_dev);
 }
 
 static struct platform_driver meson_gxbb_wdt_driver = {
 	.probe	= meson_gxbb_wdt_probe,
-	.remove	= meson_gxbb_wdt_remove,
-	.shutdown = meson_gxbb_wdt_shutdown,
 	.driver = {
 		.name = "meson-gxbb-wdt",
 		.pm = &meson_gxbb_wdt_pm_ops,
