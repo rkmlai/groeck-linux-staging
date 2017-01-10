@@ -197,19 +197,22 @@ static int pic32_wdt_drv_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "clk enable failed\n");
 		return ret;
 	}
+	ret = devm_add_action_or_reset(&pdev->dev,
+				       (void(*)(void *))clk_disable_unprepare,
+				       wdt->clk);
+	if (ret)
+		return ret;
 
 	if (pic32_wdt_is_win_enabled(wdt)) {
 		dev_err(&pdev->dev, "windowed-clear mode is not supported.\n");
-		ret = -ENODEV;
-		goto out_disable_clk;
+		return -ENODEV;
 	}
 
 	wdd->timeout = pic32_wdt_get_timeout_secs(wdt, &pdev->dev);
 	if (!wdd->timeout) {
 		dev_err(&pdev->dev,
 			"failed to read watchdog register timeout\n");
-		ret = -EINVAL;
-		goto out_disable_clk;
+		return -EINVAL;
 	}
 
 	dev_info(&pdev->dev, "timeout %d\n", wdd->timeout);
@@ -219,36 +222,17 @@ static int pic32_wdt_drv_probe(struct platform_device *pdev)
 	watchdog_set_nowayout(wdd, WATCHDOG_NOWAYOUT);
 	watchdog_set_drvdata(wdd, wdt);
 
-	ret = watchdog_register_device(wdd);
+	ret = devm_watchdog_register_device(&pdev->dev, wdd);
 	if (ret) {
 		dev_err(&pdev->dev, "watchdog register failed, err %d\n", ret);
-		goto out_disable_clk;
+		return ret;
 	}
-
-	platform_set_drvdata(pdev, wdd);
-
-	return 0;
-
-out_disable_clk:
-	clk_disable_unprepare(wdt->clk);
-
-	return ret;
-}
-
-static int pic32_wdt_drv_remove(struct platform_device *pdev)
-{
-	struct watchdog_device *wdd = platform_get_drvdata(pdev);
-	struct pic32_wdt *wdt = watchdog_get_drvdata(wdd);
-
-	watchdog_unregister_device(wdd);
-	clk_disable_unprepare(wdt->clk);
 
 	return 0;
 }
 
 static struct platform_driver pic32_wdt_driver = {
 	.probe		= pic32_wdt_drv_probe,
-	.remove		= pic32_wdt_drv_remove,
 	.driver		= {
 		.name		= "pic32-wdt",
 		.of_match_table = of_match_ptr(pic32_wdt_dt_ids),
