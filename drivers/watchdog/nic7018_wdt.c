@@ -219,7 +219,7 @@ static int nic7018_probe(struct platform_device *pdev)
 	/* Unlock WDT register */
 	outb(UNLOCK, wdt->io_base + WDT_REG_LOCK);
 
-	ret = watchdog_register_device(wdd);
+	ret = devm_watchdog_register_device(dev, wdd);
 	if (ret) {
 		outb(LOCK, wdt->io_base + WDT_REG_LOCK);
 		dev_err(dev, "failed to register watchdog\n");
@@ -234,8 +234,6 @@ static int nic7018_probe(struct platform_device *pdev)
 static int nic7018_remove(struct platform_device *pdev)
 {
 	struct nic7018_wdt *wdt = platform_get_drvdata(pdev);
-
-	watchdog_unregister_device(&wdt->wdd);
 
 	/* Lock WDT register */
 	outb(LOCK, wdt->io_base + WDT_REG_LOCK);
