@@ -168,27 +168,16 @@ static int ts4800_wdt_probe(struct platform_device *pdev)
 	 */
 	ts4800_wdt_stop(wdd);
 
-	ret = watchdog_register_device(wdd);
+	ret = devm_watchdog_register_device(&pdev->dev, wdd);
 	if (ret) {
 		dev_err(&pdev->dev,
 			"failed to register watchdog device\n");
 		return ret;
 	}
 
-	platform_set_drvdata(pdev, wdt);
-
 	dev_info(&pdev->dev,
 		 "initialized (timeout = %d sec, nowayout = %d)\n",
 		 wdd->timeout, nowayout);
-
-	return 0;
-}
-
-static int ts4800_wdt_remove(struct platform_device *pdev)
-{
-	struct ts4800_wdt *wdt = platform_get_drvdata(pdev);
-
-	watchdog_unregister_device(&wdt->wdd);
 
 	return 0;
 }
@@ -201,7 +190,6 @@ MODULE_DEVICE_TABLE(of, ts4800_wdt_of_match);
 
 static struct platform_driver ts4800_wdt_driver = {
 	.probe		= ts4800_wdt_probe,
-	.remove		= ts4800_wdt_remove,
 	.driver		= {
 		.name	= "ts4800_wdt",
 		.of_match_table = ts4800_wdt_of_match,
