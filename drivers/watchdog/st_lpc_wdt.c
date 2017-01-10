@@ -215,6 +215,11 @@ static int st_wdog_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Unable to enable clock\n");
 		return ret;
 	}
+	ret = devm_add_action_or_reset(&pdev->dev,
+				       (void(*)(void *))clk_disable_unprepare,
+				       clk);
+	if (ret)
+		return ret;
 
 	watchdog_set_drvdata(&st_wdog_dev, st_wdog);
 	watchdog_set_nowayout(&st_wdog_dev, WATCHDOG_NOWAYOUT);
@@ -223,14 +228,12 @@ static int st_wdog_probe(struct platform_device *pdev)
 	ret = watchdog_init_timeout(&st_wdog_dev, 0, &pdev->dev);
 	if (ret) {
 		dev_err(&pdev->dev, "Unable to initialise watchdog timeout\n");
-		clk_disable_unprepare(clk);
 		return ret;
 	}
 
-	ret = watchdog_register_device(&st_wdog_dev);
+	ret = devm_watchdog_register_device(&pdev->dev, &st_wdog_dev);
 	if (ret) {
 		dev_err(&pdev->dev, "Unable to register watchdog\n");
-		clk_disable_unprepare(clk);
 		return ret;
 	}
 
@@ -247,8 +250,6 @@ static int st_wdog_remove(struct platform_device *pdev)
 	struct st_wdog *st_wdog = watchdog_get_drvdata(&st_wdog_dev);
 
 	st_wdog_setup(st_wdog, false);
-	watchdog_unregister_device(&st_wdog_dev);
-	clk_disable_unprepare(st_wdog->clk);
 
 	return 0;
 }
