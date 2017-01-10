@@ -206,7 +206,7 @@ static int gpio_wdt_probe(struct platform_device *pdev)
 
 	watchdog_stop_on_reboot(&priv->wdd);
 
-	ret = watchdog_register_device(&priv->wdd);
+	ret = devm_watchdog_register_device(&pdev->dev, &priv->wdd);
 	if (ret)
 		return ret;
 
@@ -221,7 +221,6 @@ static int gpio_wdt_remove(struct platform_device *pdev)
 	struct gpio_wdt_priv *priv = platform_get_drvdata(pdev);
 
 	del_timer_sync(&priv->timer);
-	watchdog_unregister_device(&priv->wdd);
 
 	return 0;
 }
