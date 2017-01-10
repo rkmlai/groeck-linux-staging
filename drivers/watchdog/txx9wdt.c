@@ -110,21 +110,27 @@ static int __init txx9wdt_probe(struct platform_device *dev)
 	if (IS_ERR(txx9_imclk)) {
 		ret = PTR_ERR(txx9_imclk);
 		txx9_imclk = NULL;
-		goto exit;
+		return ret;
 	}
+	ret = devm_add_action_or_reset(&dev->dev, (void(*)(void *))clk_put,
+				       "imbus_clk");
+	if (ret)
+		return ret;
 	ret = clk_prepare_enable(txx9_imclk);
 	if (ret) {
-		clk_put(txx9_imclk);
 		txx9_imclk = NULL;
-		goto exit;
+		return ret;
 	}
+	ret = devm_add_action_or_reset(&dev->dev,
+				       (void(*)(void *))clk_disable_unprepare,
+				       txx9_imclk);
+	if (ret)
+		return ret;
 
 	res = platform_get_resource(dev, IORESOURCE_MEM, 0);
 	txx9wdt_reg = devm_ioremap_resource(&dev->dev, res);
-	if (IS_ERR(txx9wdt_reg)) {
-		ret = PTR_ERR(txx9wdt_reg);
-		goto exit;
-	}
+	if (IS_ERR(txx9wdt_reg))
+		return PTR_ERR(txx9wdt_reg);
 
 	if (timeout < 1 || timeout > WD_MAX_TIMEOUT)
 		timeout = TIMER_MARGIN;
@@ -134,38 +140,18 @@ static int __init txx9wdt_probe(struct platform_device *dev)
 	txx9wdt.parent = &dev->dev;
 	watchdog_set_nowayout(&txx9wdt, nowayout);
 
-	ret = watchdog_register_device(&txx9wdt);
+	watchdog_stop_on_reboot(&txx9wdt);
+	ret = devm_watchdog_register_device(&dev->dev, &txx9wdt);
 	if (ret)
-		goto exit;
+		return ret;
 
 	pr_info("Hardware Watchdog Timer: timeout=%d sec (max %ld) (nowayout= %d)\n",
 		timeout, WD_MAX_TIMEOUT, nowayout);
 
 	return 0;
-exit:
-	if (txx9_imclk) {
-		clk_disable_unprepare(txx9_imclk);
-		clk_put(txx9_imclk);
-	}
-	return ret;
-}
-
-static int __exit txx9wdt_remove(struct platform_device *dev)
-{
-	watchdog_unregister_device(&txx9wdt);
-	clk_disable_unprepare(txx9_imclk);
-	clk_put(txx9_imclk);
-	return 0;
-}
-
-static void txx9wdt_shutdown(struct platform_device *dev)
-{
-	txx9wdt_stop(&txx9wdt);
 }
 
 static struct platform_driver txx9wdt_driver = {
-	.remove = __exit_p(txx9wdt_remove),
-	.shutdown = txx9wdt_shutdown,
 	.driver = {
 		.name = "txx9wdt",
 	},
