@@ -109,12 +109,15 @@ static int ls1x_wdt_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "clk enable failed\n");
 		return err;
 	}
+	err = devm_add_action_or_reset(&pdev->dev,
+				       (void(*)(void *))clk_disable_unprepare,
+				       drvdata->clk);
+	if (err)
+		return err;
 
 	clk_rate = clk_get_rate(drvdata->clk);
-	if (!clk_rate) {
-		err = -EINVAL;
-		goto err0;
-	}
+	if (!clk_rate)
+		return -EINVAL;
 	drvdata->clk_rate = clk_rate;
 
 	ls1x_wdt = &drvdata->wdt;
@@ -129,35 +132,19 @@ static int ls1x_wdt_probe(struct platform_device *pdev)
 	watchdog_set_nowayout(ls1x_wdt, nowayout);
 	watchdog_set_drvdata(ls1x_wdt, drvdata);
 
-	err = watchdog_register_device(&drvdata->wdt);
+	err = devm_watchdog_register_device(&pdev->dev, &drvdata->wdt);
 	if (err) {
 		dev_err(&pdev->dev, "failed to register watchdog device\n");
-		goto err0;
+		return err;
 	}
 
-	platform_set_drvdata(pdev, drvdata);
-
 	dev_info(&pdev->dev, "Loongson1 Watchdog driver registered\n");
-
-	return 0;
-err0:
-	clk_disable_unprepare(drvdata->clk);
-	return err;
-}
-
-static int ls1x_wdt_remove(struct platform_device *pdev)
-{
-	struct ls1x_wdt_drvdata *drvdata = platform_get_drvdata(pdev);
-
-	watchdog_unregister_device(&drvdata->wdt);
-	clk_disable_unprepare(drvdata->clk);
 
 	return 0;
 }
 
 static struct platform_driver ls1x_wdt_driver = {
 	.probe = ls1x_wdt_probe,
-	.remove = ls1x_wdt_remove,
 	.driver = {
 		.name = "ls1x-wdt",
 	},
