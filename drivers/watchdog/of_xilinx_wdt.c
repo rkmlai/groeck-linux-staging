@@ -210,37 +210,26 @@ static int xwdt_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "unable to enable clock\n");
 		return rc;
 	}
+	rc = devm_add_action_or_reset(&pdev->dev,
+				      (void(*)(void *))clk_disable_unprepare,
+				      xdev->clk);
+	if (rc)
+		return rc;
 
 	rc = xwdt_selftest(xdev);
 	if (rc == XWT_TIMER_FAILED) {
 		dev_err(&pdev->dev, "SelfTest routine error\n");
-		goto err_clk_disable;
+		return rc;
 	}
 
-	rc = watchdog_register_device(xilinx_wdt_wdd);
+	rc = devm_watchdog_register_device(&pdev->dev, xilinx_wdt_wdd);
 	if (rc) {
 		dev_err(&pdev->dev, "Cannot register watchdog (err=%d)\n", rc);
-		goto err_clk_disable;
+		return rc;
 	}
 
 	dev_info(&pdev->dev, "Xilinx Watchdog Timer at %p with timeout %ds\n",
 		 xdev->base, xilinx_wdt_wdd->timeout);
-
-	platform_set_drvdata(pdev, xdev);
-
-	return 0;
-err_clk_disable:
-	clk_disable_unprepare(xdev->clk);
-
-	return rc;
-}
-
-static int xwdt_remove(struct platform_device *pdev)
-{
-	struct xwdt_device *xdev = platform_get_drvdata(pdev);
-
-	watchdog_unregister_device(&xdev->xilinx_wdt_wdd);
-	clk_disable_unprepare(xdev->clk);
 
 	return 0;
 }
@@ -255,7 +244,6 @@ MODULE_DEVICE_TABLE(of, xwdt_of_match);
 
 static struct platform_driver xwdt_driver = {
 	.probe       = xwdt_probe,
-	.remove      = xwdt_remove,
 	.driver = {
 		.name  = WATCHDOG_NAME,
 		.of_match_table = xwdt_of_match,
