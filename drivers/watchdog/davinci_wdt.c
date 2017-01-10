@@ -169,13 +169,18 @@ static int davinci_wdt_probe(struct platform_device *pdev)
 
 	if (IS_ERR(davinci_wdt->clk)) {
 		if (PTR_ERR(davinci_wdt->clk) != -EPROBE_DEFER)
-			dev_err(&pdev->dev, "failed to get clock node\n");
+			dev_err(dev, "failed to get clock node\n");
 		return PTR_ERR(davinci_wdt->clk);
 	}
 
-	clk_prepare_enable(davinci_wdt->clk);
-
-	platform_set_drvdata(pdev, davinci_wdt);
+	ret = clk_prepare_enable(davinci_wdt->clk);
+	if (ret)
+		return ret;
+	ret = devm_add_action_or_reset(dev,
+				       (void(*)(void *))clk_disable_unprepare,
+				       davinci_wdt->clk);
+	if (ret)
+		return ret;
 
 	wdd			= &davinci_wdt->wdd;
 	wdd->info		= &davinci_wdt_info;
@@ -183,7 +188,7 @@ static int davinci_wdt_probe(struct platform_device *pdev)
 	wdd->min_timeout	= 1;
 	wdd->max_timeout	= MAX_HEARTBEAT;
 	wdd->timeout		= DEFAULT_HEARTBEAT;
-	wdd->parent		= &pdev->dev;
+	wdd->parent		= dev;
 
 	watchdog_init_timeout(wdd, heartbeat, dev);
 
@@ -197,21 +202,11 @@ static int davinci_wdt_probe(struct platform_device *pdev)
 	if (IS_ERR(davinci_wdt->base))
 		return PTR_ERR(davinci_wdt->base);
 
-	ret = watchdog_register_device(wdd);
+	ret = devm_watchdog_register_device(dev, wdd);
 	if (ret < 0)
 		dev_err(dev, "cannot register watchdog device\n");
 
 	return ret;
-}
-
-static int davinci_wdt_remove(struct platform_device *pdev)
-{
-	struct davinci_wdt_device *davinci_wdt = platform_get_drvdata(pdev);
-
-	watchdog_unregister_device(&davinci_wdt->wdd);
-	clk_disable_unprepare(davinci_wdt->clk);
-
-	return 0;
 }
 
 static const struct of_device_id davinci_wdt_of_match[] = {
@@ -226,7 +221,6 @@ static struct platform_driver platform_wdt_driver = {
 		.of_match_table = davinci_wdt_of_match,
 	},
 	.probe = davinci_wdt_probe,
-	.remove = davinci_wdt_remove,
 };
 
 module_platform_driver(platform_wdt_driver);
