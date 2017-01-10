@@ -157,7 +157,6 @@ static int rwdt_probe(struct platform_device *pdev)
 	priv->wdev.max_timeout = 65536 / clks_per_sec;
 	priv->wdev.timeout = min(priv->wdev.max_timeout, RWDT_DEFAULT_TIMEOUT);
 
-	platform_set_drvdata(pdev, priv);
 	watchdog_set_drvdata(&priv->wdev, priv);
 	watchdog_set_nowayout(&priv->wdev, nowayout);
 
@@ -166,7 +165,7 @@ static int rwdt_probe(struct platform_device *pdev)
 	if (ret)
 		dev_warn(&pdev->dev, "Specified timeout value invalid, using default\n");
 
-	ret = watchdog_register_device(&priv->wdev);
+	ret = devm_watchdog_register_device(&pdev->dev, &priv->wdev);
 	if (ret < 0) {
 		pm_runtime_put(&pdev->dev);
 		pm_runtime_disable(&pdev->dev);
@@ -178,9 +177,6 @@ static int rwdt_probe(struct platform_device *pdev)
 
 static int rwdt_remove(struct platform_device *pdev)
 {
-	struct rwdt_priv *priv = platform_get_drvdata(pdev);
-
-	watchdog_unregister_device(&priv->wdev);
 	pm_runtime_put(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 
