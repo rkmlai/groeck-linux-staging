@@ -90,7 +90,6 @@ static int moxart_wdt_probe(struct platform_device *pdev)
 {
 	struct moxart_wdt_dev *moxart_wdt;
 	struct device *dev = &pdev->dev;
-	struct device_node *node = dev->of_node;
 	struct resource *res;
 	struct clk *clk;
 	int err;
@@ -108,7 +107,7 @@ static int moxart_wdt_probe(struct platform_device *pdev)
 	if (IS_ERR(moxart_wdt->base))
 		return PTR_ERR(moxart_wdt->base);
 
-	clk = of_clk_get(node, 0);
+	clk = devm_clk_get(dev, NULL);
 	if (IS_ERR(clk)) {
 		pr_err("%s: of_clk_get failed\n", __func__);
 		return PTR_ERR(clk);
@@ -135,7 +134,7 @@ static int moxart_wdt_probe(struct platform_device *pdev)
 
 	watchdog_set_drvdata(&moxart_wdt->dev, moxart_wdt);
 
-	err = watchdog_register_device(&moxart_wdt->dev);
+	err = devm_watchdog_register_device(dev, &moxart_wdt->dev);
 	if (err)
 		return err;
 
