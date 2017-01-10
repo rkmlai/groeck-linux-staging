@@ -274,7 +274,7 @@ static int omap_wdt_probe(struct platform_device *pdev)
 	if (!early_enable)
 		omap_wdt_disable(wdev);
 
-	ret = watchdog_register_device(&wdev->wdog);
+	ret = devm_watchdog_register_device(&pdev->dev, &wdev->wdog);
 	if (ret) {
 		pm_runtime_disable(wdev->dev);
 		return ret;
@@ -309,7 +309,6 @@ static int omap_wdt_remove(struct platform_device *pdev)
 	struct omap_wdt_dev *wdev = platform_get_drvdata(pdev);
 
 	pm_runtime_disable(wdev->dev);
-	watchdog_unregister_device(&wdev->wdog);
 
 	return 0;
 }
