@@ -507,7 +507,7 @@ static int mx25_tcq_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct input_dev *idev;
 	struct mx25_tcq_priv *priv;
-	struct mx25_tsadc *tsadc = dev_get_drvdata(pdev->dev.parent);
+	struct mx25_tsadc *tsadc = dev_get_drvdata(dev->parent);
 	struct resource *res;
 	void __iomem *mem;
 	int error;
@@ -539,10 +539,8 @@ static int mx25_tcq_probe(struct platform_device *pdev)
 	}
 
 	idev = devm_input_allocate_device(dev);
-	if (!idev) {
-		dev_err(dev, "Failed to allocate input device\n");
+	if (!idev)
 		return -ENOMEM;
-	}
 
 	idev->name = mx25_tcq_name;
 	input_set_capability(idev, EV_KEY, BTN_TOUCH);
