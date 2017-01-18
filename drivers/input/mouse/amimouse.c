@@ -96,10 +96,9 @@ static void amimouse_close(struct input_dev *dev)
 
 static int __init amimouse_probe(struct platform_device *pdev)
 {
-	int err;
 	struct input_dev *dev;
 
-	dev = input_allocate_device();
+	dev = devm_input_allocate_device(&pdev->dev);
 	if (!dev)
 		return -ENOMEM;
 
@@ -118,27 +117,10 @@ static int __init amimouse_probe(struct platform_device *pdev)
 	dev->close = amimouse_close;
 	dev->dev.parent = &pdev->dev;
 
-	err = input_register_device(dev);
-	if (err) {
-		input_free_device(dev);
-		return err;
-	}
-
-	platform_set_drvdata(pdev, dev);
-
-	return 0;
-}
-
-static int __exit amimouse_remove(struct platform_device *pdev)
-{
-	struct input_dev *dev = platform_get_drvdata(pdev);
-
-	input_unregister_device(dev);
-	return 0;
+	return input_register_device(dev);
 }
 
 static struct platform_driver amimouse_driver = {
-	.remove = __exit_p(amimouse_remove),
 	.driver   = {
 		.name	= "amiga-mouse",
 	},
