@@ -118,7 +118,7 @@ static irqreturn_t max11801_ts_interrupt(int irq, void *dev_id)
 		 * and event tag
 		 */
 		if (ret < XY_BUFSIZE)
-			goto out;
+			return IRQ_HANDLED;
 
 		for (i = 0; i < XY_BUFSIZE; i += XY_BUFSIZE / 2) {
 			if ((buf[i + 1] & MEASURE_TAG_MASK) == MEASURE_X_TAG)
@@ -130,7 +130,7 @@ static irqreturn_t max11801_ts_interrupt(int irq, void *dev_id)
 		}
 
 		if ((buf[1] & EVENT_TAG_MASK) != (buf[3] & EVENT_TAG_MASK))
-			goto out;
+			return IRQ_HANDLED;
 
 		switch (buf[1] & EVENT_TAG_MASK) {
 		case EVENT_INIT:
@@ -151,7 +151,6 @@ static irqreturn_t max11801_ts_interrupt(int irq, void *dev_id)
 			break;
 		}
 	}
-out:
 	return IRQ_HANDLED;
 }
 
@@ -182,10 +181,8 @@ static int max11801_ts_probe(struct i2c_client *client,
 
 	data = devm_kzalloc(&client->dev, sizeof(*data), GFP_KERNEL);
 	input_dev = devm_input_allocate_device(&client->dev);
-	if (!data || !input_dev) {
-		dev_err(&client->dev, "Failed to allocate memory\n");
+	if (!data || !input_dev)
 		return -ENOMEM;
-	}
 
 	data->client = client;
 	data->input_dev = input_dev;
@@ -212,12 +209,7 @@ static int max11801_ts_probe(struct i2c_client *client,
 		return error;
 	}
 
-	error = input_register_device(data->input_dev);
-	if (error)
-		return error;
-
-	i2c_set_clientdata(client, data);
-	return 0;
+	return input_register_device(data->input_dev);
 }
 
 static const struct i2c_device_id max11801_ts_id[] = {
