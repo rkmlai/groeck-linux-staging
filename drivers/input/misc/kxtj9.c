@@ -196,11 +196,8 @@ static int kxtj9_update_odr(struct kxtj9_data *tj9, unsigned int poll_interval)
 	if (err < 0)
 		return err;
 
-	err = i2c_smbus_write_byte_data(tj9->client, CTRL_REG1, tj9->ctrl_reg1);
-	if (err < 0)
-		return err;
-
-	return 0;
+	return i2c_smbus_write_byte_data(tj9->client, CTRL_REG1,
+					 tj9->ctrl_reg1);
 }
 
 static int kxtj9_device_power_on(struct kxtj9_data *tj9)
@@ -526,11 +523,8 @@ static int kxtj9_probe(struct i2c_client *client,
 	}
 
 	tj9 = kzalloc(sizeof(*tj9), GFP_KERNEL);
-	if (!tj9) {
-		dev_err(&client->dev,
-			"failed to allocate memory for module data\n");
+	if (!tj9)
 		return -ENOMEM;
-	}
 
 	tj9->client = client;
 	tj9->pdata = *pdata;
