@@ -120,7 +120,7 @@ static irqreturn_t mcs5000_ts_interrupt(int irq, void *dev_id)
 			READ_BLOCK_SIZE, buffer);
 	if (err < 0) {
 		dev_err(&client->dev, "%s, err[%d]\n", __func__, err);
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	switch (buffer[READ_INPUT_INFO]) {
@@ -157,7 +157,6 @@ static irqreturn_t mcs5000_ts_interrupt(int irq, void *dev_id)
 		break;
 	}
 
- out:
 	return IRQ_HANDLED;
 }
 
@@ -198,18 +197,14 @@ static int mcs5000_ts_probe(struct i2c_client *client,
 		return -EINVAL;
 
 	data = devm_kzalloc(&client->dev, sizeof(*data), GFP_KERNEL);
-	if (!data) {
-		dev_err(&client->dev, "Failed to allocate memory\n");
+	if (!data)
 		return -ENOMEM;
-	}
 
 	data->client = client;
 
 	input_dev = devm_input_allocate_device(&client->dev);
-	if (!input_dev) {
-		dev_err(&client->dev, "Failed to allocate input device\n");
+	if (!input_dev)
 		return -ENOMEM;
-	}
 
 	input_dev->name = "MELFAS MCS-5000 Touchscreen";
 	input_dev->id.bustype = BUS_I2C;
