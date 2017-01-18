@@ -259,7 +259,6 @@ static int twl6040_vibra_probe(struct platform_device *pdev)
 	info = devm_kzalloc(&pdev->dev, sizeof(*info), GFP_KERNEL);
 	if (!info) {
 		of_node_put(twl6040_core_node);
-		dev_err(&pdev->dev, "couldn't allocate memory\n");
 		return -ENOMEM;
 	}
 
@@ -338,10 +337,8 @@ static int twl6040_vibra_probe(struct platform_device *pdev)
 	INIT_WORK(&info->play_work, vibra_play_work);
 
 	info->input_dev = devm_input_allocate_device(&pdev->dev);
-	if (!info->input_dev) {
-		dev_err(info->dev, "couldn't allocate input device\n");
+	if (!info->input_dev)
 		return -ENOMEM;
-	}
 
 	input_set_drvdata(info->input_dev, info);
 
