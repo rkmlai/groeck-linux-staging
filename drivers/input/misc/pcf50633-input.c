@@ -59,15 +59,13 @@ static int pcf50633_input_probe(struct platform_device *pdev)
 	int ret;
 
 
-	input = kzalloc(sizeof(*input), GFP_KERNEL);
+	input = devm_kzalloc(&pdev->dev, sizeof(*input), GFP_KERNEL);
 	if (!input)
 		return -ENOMEM;
 
-	input_dev = input_allocate_device();
-	if (!input_dev) {
-		kfree(input);
+	input_dev = devm_input_allocate_device(&pdev->dev);
+	if (!input_dev)
 		return -ENOMEM;
-	}
 
 	platform_set_drvdata(pdev, input);
 	input->pcf = dev_to_pcf50633(pdev->dev.parent);
@@ -79,11 +77,8 @@ static int pcf50633_input_probe(struct platform_device *pdev)
 	set_bit(KEY_POWER, input_dev->keybit);
 
 	ret = input_register_device(input_dev);
-	if (ret) {
-		input_free_device(input_dev);
-		kfree(input);
+	if (ret)
 		return ret;
-	}
 	pcf50633_register_irq(input->pcf, PCF50633_IRQ_ONKEYR,
 				pcf50633_input_irq, input);
 	pcf50633_register_irq(input->pcf, PCF50633_IRQ_ONKEYF,
@@ -98,9 +93,6 @@ static int pcf50633_input_remove(struct platform_device *pdev)
 
 	pcf50633_free_irq(input->pcf, PCF50633_IRQ_ONKEYR);
 	pcf50633_free_irq(input->pcf, PCF50633_IRQ_ONKEYF);
-
-	input_unregister_device(input->input_dev);
-	kfree(input);
 
 	return 0;
 }
