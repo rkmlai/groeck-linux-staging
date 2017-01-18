@@ -72,6 +72,10 @@ static irqreturn_t da9052_onkey_irq(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+static void da9052_onkey_probe_work_cb(void *w) {
+	cancel_delayed_work_sync(w);
+}
+
 static int da9052_onkey_probe(struct platform_device *pdev)
 {
 	struct da9052 *da9052 = dev_get_drvdata(pdev->dev.parent);
@@ -84,17 +88,19 @@ static int da9052_onkey_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	onkey = kzalloc(sizeof(*onkey), GFP_KERNEL);
-	input_dev = input_allocate_device();
-	if (!onkey || !input_dev) {
-		dev_err(&pdev->dev, "Failed to allocate memory\n");
-		error = -ENOMEM;
-		goto err_free_mem;
-	}
+	onkey = devm_kzalloc(&pdev->dev, sizeof(*onkey), GFP_KERNEL);
+	input_dev = devm_input_allocate_device(&pdev->dev);
+	if (!onkey || !input_dev)
+		return -ENOMEM;
 
 	onkey->input = input_dev;
 	onkey->da9052 = da9052;
 	INIT_DELAYED_WORK(&onkey->work, da9052_onkey_work);
+	error = devm_add_action_or_reset(&pdev->dev,
+					 da9052_onkey_probe_work_cb,
+					 &onkey->work);
+	if (error)
+		return error;
 
 	input_dev->name = "da9052-onkey";
 	input_dev->phys = "da9052-onkey/input0";
@@ -108,7 +114,7 @@ static int da9052_onkey_probe(struct platform_device *pdev)
 	if (error < 0) {
 		dev_err(onkey->da9052->dev,
 			"Failed to register ONKEY IRQ: %d\n", error);
-		goto err_free_mem;
+		return error;
 	}
 
 	error = input_register_device(onkey->input);
@@ -123,10 +129,6 @@ static int da9052_onkey_probe(struct platform_device *pdev)
 
 err_free_irq:
 	da9052_free_irq(onkey->da9052, DA9052_IRQ_NONKEY, onkey);
-	cancel_delayed_work_sync(&onkey->work);
-err_free_mem:
-	input_free_device(input_dev);
-	kfree(onkey);
 
 	return error;
 }
@@ -136,10 +138,6 @@ static int da9052_onkey_remove(struct platform_device *pdev)
 	struct da9052_onkey *onkey = platform_get_drvdata(pdev);
 
 	da9052_free_irq(onkey->da9052, DA9052_IRQ_NONKEY, onkey);
-	cancel_delayed_work_sync(&onkey->work);
-
-	input_unregister_device(onkey->input);
-	kfree(onkey);
 
 	return 0;
 }
