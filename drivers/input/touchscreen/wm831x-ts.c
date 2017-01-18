@@ -247,10 +247,8 @@ static int wm831x_ts_probe(struct platform_device *pdev)
 	wm831x_ts = devm_kzalloc(&pdev->dev, sizeof(struct wm831x_ts),
 				 GFP_KERNEL);
 	input_dev = devm_input_allocate_device(&pdev->dev);
-	if (!wm831x_ts || !input_dev) {
-		error = -ENOMEM;
-		goto err_alloc;
-	}
+	if (!wm831x_ts || !input_dev)
+		return -ENOMEM;
 
 	wm831x_ts->wm831x = wm831x;
 	wm831x_ts->input_dev = input_dev;
@@ -319,14 +317,14 @@ static int wm831x_ts_probe(struct platform_device *pdev)
 	else
 		irqf = IRQF_TRIGGER_HIGH;
 
-	error = request_threaded_irq(wm831x_ts->data_irq,
-				     NULL, wm831x_ts_data_irq,
-				     irqf | IRQF_ONESHOT,
-				     "Touchscreen data", wm831x_ts);
+	error = devm_request_threaded_irq(&pdev->dev, wm831x_ts->data_irq,
+					  NULL, wm831x_ts_data_irq,
+					  irqf | IRQF_ONESHOT,
+					  "Touchscreen data", wm831x_ts);
 	if (error) {
 		dev_err(&pdev->dev, "Failed to request data IRQ %d: %d\n",
 			wm831x_ts->data_irq, error);
-		goto err_alloc;
+		return error;
 	}
 	disable_irq(wm831x_ts->data_irq);
 
@@ -335,14 +333,14 @@ static int wm831x_ts_probe(struct platform_device *pdev)
 	else
 		irqf = IRQF_TRIGGER_HIGH;
 
-	error = request_threaded_irq(wm831x_ts->pd_irq,
-				     NULL, wm831x_ts_pen_down_irq,
-				     irqf | IRQF_ONESHOT,
-				     "Touchscreen pen down", wm831x_ts);
+	error = devm_request_threaded_irq(&pdev->dev, wm831x_ts->pd_irq, NULL,
+					  wm831x_ts_pen_down_irq,
+					  irqf | IRQF_ONESHOT,
+					  "Touchscreen pen down", wm831x_ts);
 	if (error) {
 		dev_err(&pdev->dev, "Failed to request pen down IRQ %d: %d\n",
 			wm831x_ts->pd_irq, error);
-		goto err_data_irq;
+		return error;
 	}
 
 	/* set up touch configuration */
@@ -363,30 +361,7 @@ static int wm831x_ts_probe(struct platform_device *pdev)
 	input_set_drvdata(input_dev, wm831x_ts);
 	input_dev->dev.parent = &pdev->dev;
 
-	error = input_register_device(input_dev);
-	if (error)
-		goto err_pd_irq;
-
-	platform_set_drvdata(pdev, wm831x_ts);
-	return 0;
-
-err_pd_irq:
-	free_irq(wm831x_ts->pd_irq, wm831x_ts);
-err_data_irq:
-	free_irq(wm831x_ts->data_irq, wm831x_ts);
-err_alloc:
-
-	return error;
-}
-
-static int wm831x_ts_remove(struct platform_device *pdev)
-{
-	struct wm831x_ts *wm831x_ts = platform_get_drvdata(pdev);
-
-	free_irq(wm831x_ts->pd_irq, wm831x_ts);
-	free_irq(wm831x_ts->data_irq, wm831x_ts);
-
-	return 0;
+	return input_register_device(input_dev);
 }
 
 static struct platform_driver wm831x_ts_driver = {
@@ -394,7 +369,6 @@ static struct platform_driver wm831x_ts_driver = {
 		.name = "wm831x-touch",
 	},
 	.probe = wm831x_ts_probe,
-	.remove = wm831x_ts_remove,
 };
 module_platform_driver(wm831x_ts_driver);
 
