@@ -487,10 +487,8 @@ static struct auo_pixcir_ts_platdata *auo_pixcir_parse_dt(struct device *dev)
 		return ERR_PTR(-ENOENT);
 
 	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
-	if (!pdata) {
-		dev_err(dev, "failed to allocate platform data\n");
+	if (!pdata)
 		return ERR_PTR(-ENOMEM);
-	}
 
 	pdata->gpio_int = of_get_gpio(np, 0);
 	if (!gpio_is_valid(pdata->gpio_int)) {
@@ -555,10 +553,8 @@ static int auo_pixcir_probe(struct i2c_client *client,
 		return -ENOMEM;
 
 	input_dev = devm_input_allocate_device(&client->dev);
-	if (!input_dev) {
-		dev_err(&client->dev, "could not allocate input device\n");
+	if (!input_dev)
 		return -ENOMEM;
-	}
 
 	ts->pdata = pdata;
 	ts->client = client;
@@ -616,9 +612,8 @@ static int auo_pixcir_probe(struct i2c_client *client,
 		return error;
 	}
 
-	error = devm_add_action(&client->dev, auo_pixcir_reset, ts);
+	error = devm_add_action_or_reset(&client->dev, auo_pixcir_reset, ts);
 	if (error) {
-		auo_pixcir_reset(ts);
 		dev_err(&client->dev, "failed to register reset action, %d\n",
 			error);
 		return error;
@@ -627,10 +622,8 @@ static int auo_pixcir_probe(struct i2c_client *client,
 	msleep(200);
 
 	version = i2c_smbus_read_byte_data(client, AUO_PIXCIR_REG_VERSION);
-	if (version < 0) {
-		error = version;
-		return error;
-	}
+	if (version < 0)
+		return version;
 
 	dev_info(&client->dev, "firmware version 0x%X\n", version);
 
