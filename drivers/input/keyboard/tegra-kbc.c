@@ -619,10 +619,8 @@ static int tegra_kbc_probe(struct platform_device *pdev)
 	match = of_match_device(tegra_kbc_of_match, &pdev->dev);
 
 	kbc = devm_kzalloc(&pdev->dev, sizeof(*kbc), GFP_KERNEL);
-	if (!kbc) {
-		dev_err(&pdev->dev, "failed to alloc memory for kbc\n");
+	if (!kbc)
 		return -ENOMEM;
-	}
 
 	kbc->dev = &pdev->dev;
 	kbc->hw_support = match->data;
@@ -647,10 +645,8 @@ static int tegra_kbc_probe(struct platform_device *pdev)
 	}
 
 	kbc->idev = devm_input_allocate_device(&pdev->dev);
-	if (!kbc->idev) {
-		dev_err(&pdev->dev, "failed to allocate input device\n");
+	if (!kbc->idev)
 		return -ENOMEM;
-	}
 
 	setup_timer(&kbc->timer, tegra_kbc_keypress_timer, (unsigned long)kbc);
 
