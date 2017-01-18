@@ -183,10 +183,8 @@ static int drv2665_probe(struct i2c_client *client,
 	}
 
 	haptics->input_dev = devm_input_allocate_device(&client->dev);
-	if (!haptics->input_dev) {
-		dev_err(&client->dev, "Failed to allocate input device\n");
+	if (!haptics->input_dev)
 		return -ENOMEM;
-	}
 
 	haptics->input_dev->name = "drv2665:haptics";
 	haptics->input_dev->dev.parent = client->dev.parent;
