@@ -170,9 +170,9 @@ static int __init davinci_ks_probe(struct platform_device *pdev)
 {
 	struct davinci_ks *davinci_ks;
 	struct input_dev *key_dev;
-	struct resource *res, *mem;
+	struct resource *res;
 	struct device *dev = &pdev->dev;
-	struct davinci_ks_platform_data *pdata = dev_get_platdata(&pdev->dev);
+	struct davinci_ks_platform_data *pdata = dev_get_platdata(dev);
 	int error, i;
 
 	if (pdata->device_enable) {
@@ -188,21 +188,19 @@ static int __init davinci_ks_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	davinci_ks = kzalloc(sizeof(struct davinci_ks) +
-		sizeof(unsigned short) * pdata->keymapsize, GFP_KERNEL);
-	if (!davinci_ks) {
-		dev_dbg(dev, "could not allocate memory for private data\n");
+	davinci_ks = devm_kzalloc(dev,
+				  sizeof(struct davinci_ks) + sizeof(unsigned short) * pdata->keymapsize,
+				  GFP_KERNEL);
+	if (!davinci_ks)
 		return -ENOMEM;
-	}
 
 	memcpy(davinci_ks->keymap, pdata->keymap,
 		sizeof(unsigned short) * pdata->keymapsize);
 
-	key_dev = input_allocate_device();
+	key_dev = devm_input_allocate_device(dev);
 	if (!key_dev) {
 		dev_dbg(dev, "could not allocate input device\n");
-		error = -ENOMEM;
-		goto fail1;
+		return -ENOMEM;
 	}
 
 	davinci_ks->input = key_dev;
@@ -210,34 +208,21 @@ static int __init davinci_ks_probe(struct platform_device *pdev)
 	davinci_ks->irq = platform_get_irq(pdev, 0);
 	if (davinci_ks->irq < 0) {
 		dev_err(dev, "no key scan irq\n");
-		error = davinci_ks->irq;
-		goto fail2;
+		return davinci_ks->irq;
 	}
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
 		dev_err(dev, "no mem resource\n");
-		error = -EINVAL;
-		goto fail2;
+		return -EINVAL;
 	}
 
-	davinci_ks->pbase = res->start;
 	davinci_ks->base_size = resource_size(res);
 
-	mem = request_mem_region(davinci_ks->pbase, davinci_ks->base_size,
-				 pdev->name);
-	if (!mem) {
-		dev_err(dev, "key scan registers at %08x are not free\n",
-			davinci_ks->pbase);
-		error = -EBUSY;
-		goto fail2;
-	}
-
-	davinci_ks->base = ioremap(davinci_ks->pbase, davinci_ks->base_size);
-	if (!davinci_ks->base) {
+	davinci_ks->base = devm_ioremap_resource(dev, res);
+	if (IS_ERR(davinci_ks->base)) {
 		dev_err(dev, "can't ioremap MEM resource.\n");
-		error = -ENOMEM;
-		goto fail3;
+		return PTR_ERR(davinci_ks->base);
 	}
 
 	/* Enable auto repeat feature of Linux input subsystem */
@@ -255,7 +240,7 @@ static int __init davinci_ks_probe(struct platform_device *pdev)
 
 	key_dev->name = "davinci_keyscan";
 	key_dev->phys = "davinci_keyscan/input0";
-	key_dev->dev.parent = &pdev->dev;
+	key_dev->dev.parent = dev;
 	key_dev->id.bustype = BUS_HOST;
 	key_dev->id.vendor = 0x0001;
 	key_dev->id.product = 0x0001;
@@ -267,54 +252,22 @@ static int __init davinci_ks_probe(struct platform_device *pdev)
 	error = input_register_device(davinci_ks->input);
 	if (error < 0) {
 		dev_err(dev, "unable to register davinci key scan device\n");
-		goto fail4;
+		return error;
 	}
 
-	error = request_irq(davinci_ks->irq, davinci_ks_interrupt,
-			  0, pdev->name, davinci_ks);
+	error = devm_request_irq(dev, davinci_ks->irq, davinci_ks_interrupt,
+				 0, pdev->name, davinci_ks);
 	if (error < 0) {
-		dev_err(dev, "unable to register davinci key scan interrupt\n");
-		goto fail5;
+		dev_err(dev,
+			"unable to register davinci key scan interrupt\n");
+		return error;
 	}
 
 	error = davinci_ks_initialize(davinci_ks);
 	if (error < 0) {
 		dev_err(dev, "unable to initialize davinci key scan device\n");
-		goto fail6;
+		return error;
 	}
-
-	platform_set_drvdata(pdev, davinci_ks);
-	return 0;
-
-fail6:
-	free_irq(davinci_ks->irq, davinci_ks);
-fail5:
-	input_unregister_device(davinci_ks->input);
-	key_dev = NULL;
-fail4:
-	iounmap(davinci_ks->base);
-fail3:
-	release_mem_region(davinci_ks->pbase, davinci_ks->base_size);
-fail2:
-	input_free_device(key_dev);
-fail1:
-	kfree(davinci_ks);
-
-	return error;
-}
-
-static int davinci_ks_remove(struct platform_device *pdev)
-{
-	struct davinci_ks *davinci_ks = platform_get_drvdata(pdev);
-
-	free_irq(davinci_ks->irq, davinci_ks);
-
-	input_unregister_device(davinci_ks->input);
-
-	iounmap(davinci_ks->base);
-	release_mem_region(davinci_ks->pbase, davinci_ks->base_size);
-
-	kfree(davinci_ks);
 
 	return 0;
 }
@@ -323,7 +276,6 @@ static struct platform_driver davinci_ks_driver = {
 	.driver	= {
 		.name = "davinci_keyscan",
 	},
-	.remove	= davinci_ks_remove,
 };
 
 module_platform_driver_probe(davinci_ks_driver, davinci_ks_probe);
