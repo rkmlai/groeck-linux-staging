@@ -382,11 +382,7 @@ static int goodix_int_sync(struct goodix_ts_data *ts)
 
 	msleep(50);				/* T5: 50ms */
 
-	error = gpiod_direction_input(ts->gpiod_int);
-	if (error)
-		return error;
-
-	return 0;
+	return gpiod_direction_input(ts->gpiod_int);
 }
 
 /**
@@ -423,11 +419,7 @@ static int goodix_reset(struct goodix_ts_data *ts)
 	if (error)
 		return error;
 
-	error = goodix_int_sync(ts);
-	if (error)
-		return error;
-
-	return 0;
+	return goodix_int_sync(ts);
 }
 
 /**
@@ -590,10 +582,8 @@ static int goodix_request_input_dev(struct goodix_ts_data *ts)
 	int error;
 
 	ts->input_dev = devm_input_allocate_device(&ts->client->dev);
-	if (!ts->input_dev) {
-		dev_err(&ts->client->dev, "Failed to allocate input device.");
+	if (!ts->input_dev)
 		return -ENOMEM;
-	}
 
 	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_X,
 			     0, ts->abs_x_max, 0, 0);
@@ -836,11 +826,7 @@ static int __maybe_unused goodix_resume(struct device *dev)
 	if (error)
 		return error;
 
-	error = goodix_request_irq(ts);
-	if (error)
-		return error;
-
-	return 0;
+	return goodix_request_irq(ts);
 }
 
 static SIMPLE_DEV_PM_OPS(goodix_pm_ops, goodix_suspend, goodix_resume);
