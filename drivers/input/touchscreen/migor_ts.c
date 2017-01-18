@@ -67,13 +67,13 @@ static irqreturn_t migor_ts_isr(int irq, void *dev_id)
 	buf[0] = 0;
 	if (i2c_master_send(priv->client, buf, 1) != 1) {
 		dev_err(&priv->client->dev, "Unable to write i2c index\n");
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	/* Now do Page Read */
 	if (i2c_master_recv(priv->client, buf, sizeof(buf)) != sizeof(buf)) {
 		dev_err(&priv->client->dev, "Unable to read i2c page\n");
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	ypos = ((buf[9] & 0x03) << 8 | buf[8]);
@@ -95,7 +95,6 @@ static irqreturn_t migor_ts_isr(int irq, void *dev_id)
 		break;
 	}
 
- out:
 	return IRQ_HANDLED;
 }
 
@@ -136,13 +135,10 @@ static int migor_ts_probe(struct i2c_client *client,
 	struct input_dev *input;
 	int error;
 
-	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
-	input = input_allocate_device();
-	if (!priv || !input) {
-		dev_err(&client->dev, "failed to allocate memory\n");
-		error = -ENOMEM;
-		goto err_free_mem;
-	}
+	priv = devm_kzalloc(&client->dev, sizeof(*priv), GFP_KERNEL);
+	input = devm_input_allocate_device(&client->dev);
+	if (!priv || !input)
+		return -ENOMEM;
 
 	priv->client = client;
 	priv->input = input;
@@ -164,40 +160,21 @@ static int migor_ts_probe(struct i2c_client *client,
 
 	input_set_drvdata(input, priv);
 
-	error = request_threaded_irq(priv->irq, NULL, migor_ts_isr,
-                                     IRQF_TRIGGER_LOW | IRQF_ONESHOT,
-                                     client->name, priv);
+	error = devm_request_threaded_irq(&client->dev, priv->irq, NULL,
+					  migor_ts_isr,
+					  IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+					  client->name, priv);
 	if (error) {
 		dev_err(&client->dev, "Unable to request touchscreen IRQ.\n");
-		goto err_free_mem;
+		return error;
 	}
 
 	error = input_register_device(input);
 	if (error)
-		goto err_free_irq;
+		return error;
 
 	i2c_set_clientdata(client, priv);
 	device_init_wakeup(&client->dev, 1);
-
-	return 0;
-
- err_free_irq:
-	free_irq(priv->irq, priv);
- err_free_mem:
-	input_free_device(input);
-	kfree(priv);
-	return error;
-}
-
-static int migor_ts_remove(struct i2c_client *client)
-{
-	struct migor_ts_priv *priv = i2c_get_clientdata(client);
-
-	free_irq(priv->irq, priv);
-	input_unregister_device(priv->input);
-	kfree(priv);
-
-	dev_set_drvdata(&client->dev, NULL);
 
 	return 0;
 }
@@ -238,7 +215,6 @@ static struct i2c_driver migor_ts_driver = {
 		.pm = &migor_ts_pm,
 	},
 	.probe = migor_ts_probe,
-	.remove = migor_ts_remove,
 	.id_table = migor_ts_id,
 };
 
