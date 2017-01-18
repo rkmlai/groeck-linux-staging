@@ -205,6 +205,10 @@ static void navpoint_close(struct input_dev *input)
 	navpoint_down(navpoint);
 }
 
+static void navpoint_probe_pxa_ssb_cb(void *ssp) {
+	pxa_ssp_free(ssp);
+}
+
 static int navpoint_probe(struct platform_device *pdev)
 {
 	const struct navpoint_platform_data *pdata =
@@ -220,17 +224,20 @@ static int navpoint_probe(struct platform_device *pdev)
 	}
 
 	if (gpio_is_valid(pdata->gpio)) {
-		error = gpio_request_one(pdata->gpio, GPIOF_OUT_INIT_LOW,
-					 "SYNAPTICS_ON");
+		error = devm_gpio_request_one(&pdev->dev, pdata->gpio,
+					      GPIOF_OUT_INIT_LOW,
+					      "SYNAPTICS_ON");
 		if (error)
 			return error;
 	}
 
 	ssp = pxa_ssp_request(pdata->port, pdev->name);
-	if (!ssp) {
-		error = -ENODEV;
-		goto err_free_gpio;
-	}
+	if (!ssp)
+		return -ENODEV;
+	error = devm_add_action_or_reset(&pdev->dev,
+					 navpoint_probe_pxa_ssb_cb, ssp);
+	if (error)
+		return error;
 
 	/* HaRET does not disable devices before jumping into Linux */
 	if (pxa_ssp_read_reg(ssp, SSCR0) & SSCR0_SSE) {
@@ -238,12 +245,10 @@ static int navpoint_probe(struct platform_device *pdev)
 		dev_warn(&pdev->dev, "ssp%d already enabled\n", pdata->port);
 	}
 
-	navpoint = kzalloc(sizeof(*navpoint), GFP_KERNEL);
-	input = input_allocate_device();
-	if (!navpoint || !input) {
-		error = -ENOMEM;
-		goto err_free_mem;
-	}
+	navpoint = devm_kzalloc(&pdev->dev, sizeof(*navpoint), GFP_KERNEL);
+	input = devm_input_allocate_device(&pdev->dev);
+	if (!navpoint || !input)
+		return -ENOMEM;
 
 	navpoint->ssp = ssp;
 	navpoint->input = input;
@@ -272,48 +277,17 @@ static int navpoint_probe(struct platform_device *pdev)
 
 	input_set_drvdata(input, navpoint);
 
-	error = request_irq(ssp->irq, navpoint_irq, 0, pdev->name, navpoint);
+	error = devm_request_irq(&pdev->dev, ssp->irq, navpoint_irq, 0,
+				 pdev->name, navpoint);
 	if (error)
-		goto err_free_mem;
+		return error;
 
 	error = input_register_device(input);
 	if (error)
-		goto err_free_irq;
+		return error;
 
 	platform_set_drvdata(pdev, navpoint);
 	dev_dbg(&pdev->dev, "ssp%d, irq %d\n", pdata->port, ssp->irq);
-
-	return 0;
-
-err_free_irq:
-	free_irq(ssp->irq, navpoint);
-err_free_mem:
-	input_free_device(input);
-	kfree(navpoint);
-	pxa_ssp_free(ssp);
-err_free_gpio:
-	if (gpio_is_valid(pdata->gpio))
-		gpio_free(pdata->gpio);
-
-	return error;
-}
-
-static int navpoint_remove(struct platform_device *pdev)
-{
-	const struct navpoint_platform_data *pdata =
-					dev_get_platdata(&pdev->dev);
-	struct navpoint *navpoint = platform_get_drvdata(pdev);
-	struct ssp_device *ssp = navpoint->ssp;
-
-	free_irq(ssp->irq, navpoint);
-
-	input_unregister_device(navpoint->input);
-	kfree(navpoint);
-
-	pxa_ssp_free(ssp);
-
-	if (gpio_is_valid(pdata->gpio))
-		gpio_free(pdata->gpio);
 
 	return 0;
 }
@@ -350,7 +324,6 @@ static SIMPLE_DEV_PM_OPS(navpoint_pm_ops, navpoint_suspend, navpoint_resume);
 
 static struct platform_driver navpoint_driver = {
 	.probe		= navpoint_probe,
-	.remove		= navpoint_remove,
 	.driver = {
 		.name	= "navpoint",
 		.pm	= &navpoint_pm_ops,
