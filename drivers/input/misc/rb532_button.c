@@ -55,9 +55,8 @@ static void rb532_button_poll(struct input_polled_dev *poll_dev)
 static int rb532_button_probe(struct platform_device *pdev)
 {
 	struct input_polled_dev *poll_dev;
-	int error;
 
-	poll_dev = input_allocate_polled_device();
+	poll_dev = devm_input_allocate_polled_device(&pdev->dev);
 	if (!poll_dev)
 		return -ENOMEM;
 
@@ -69,32 +68,13 @@ static int rb532_button_probe(struct platform_device *pdev)
 	poll_dev->input->id.bustype = BUS_HOST;
 	poll_dev->input->dev.parent = &pdev->dev;
 
-	dev_set_drvdata(&pdev->dev, poll_dev);
-
 	input_set_capability(poll_dev->input, EV_KEY, RB532_BTN_KSYM);
 
-	error = input_register_polled_device(poll_dev);
-	if (error) {
-		input_free_polled_device(poll_dev);
-		return error;
-	}
-
-	return 0;
-}
-
-static int rb532_button_remove(struct platform_device *pdev)
-{
-	struct input_polled_dev *poll_dev = dev_get_drvdata(&pdev->dev);
-
-	input_unregister_polled_device(poll_dev);
-	input_free_polled_device(poll_dev);
-
-	return 0;
+	return input_register_polled_device(poll_dev);
 }
 
 static struct platform_driver rb532_button_driver = {
 	.probe = rb532_button_probe,
-	.remove = rb532_button_remove,
 	.driver = {
 		.name = DRV_NAME,
 	},
