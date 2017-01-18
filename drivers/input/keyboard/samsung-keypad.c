@@ -258,10 +258,8 @@ samsung_keypad_parse_dt(struct device *dev)
 	}
 
 	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
-	if (!pdata) {
-		dev_err(dev, "could not allocate memory for platform data\n");
+	if (!pdata)
 		return ERR_PTR(-ENOMEM);
-	}
 
 	of_property_read_u32(np, "samsung,keypad-num-rows", &num_rows);
 	of_property_read_u32(np, "samsung,keypad-num-columns", &num_cols);
@@ -273,19 +271,15 @@ samsung_keypad_parse_dt(struct device *dev)
 	pdata->cols = num_cols;
 
 	keymap_data = devm_kzalloc(dev, sizeof(*keymap_data), GFP_KERNEL);
-	if (!keymap_data) {
-		dev_err(dev, "could not allocate memory for keymap data\n");
+	if (!keymap_data)
 		return ERR_PTR(-ENOMEM);
-	}
 	pdata->keymap_data = keymap_data;
 
 	key_count = of_get_child_count(np);
 	keymap_data->keymap_size = key_count;
 	keymap = devm_kzalloc(dev, sizeof(uint32_t) * key_count, GFP_KERNEL);
-	if (!keymap) {
-		dev_err(dev, "could not allocate memory for keymap\n");
+	if (!keymap)
 		return ERR_PTR(-ENOMEM);
-	}
 	keymap_data->keymap = keymap;
 
 	for_each_child_of_node(np, key_np) {
