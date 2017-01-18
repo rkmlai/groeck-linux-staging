@@ -203,20 +203,20 @@ static irqreturn_t mms114_interrupt(int irq, void *dev_id)
 	mutex_lock(&input_dev->mutex);
 	if (!input_dev->users) {
 		mutex_unlock(&input_dev->mutex);
-		goto out;
+		return IRQ_HANDLED;
 	}
 	mutex_unlock(&input_dev->mutex);
 
 	packet_size = mms114_read_reg(data, MMS114_PACKET_SIZE);
 	if (packet_size <= 0)
-		goto out;
+		return IRQ_HANDLED;
 
 	touch_size = packet_size / MMS114_PACKET_NUM;
 
 	error = __mms114_read_reg(data, MMS114_INFOMATION, packet_size,
 			(u8 *)touch);
 	if (error < 0)
-		goto out;
+		return IRQ_HANDLED;
 
 	for (index = 0; index < touch_size; index++)
 		mms114_process_mt(data, touch + index);
@@ -224,7 +224,6 @@ static irqreturn_t mms114_interrupt(int irq, void *dev_id)
 	input_mt_report_pointer_emulation(data->input_dev, true);
 	input_sync(data->input_dev);
 
-out:
 	return IRQ_HANDLED;
 }
 
@@ -386,10 +385,8 @@ static struct mms114_platform_data *mms114_parse_dt(struct device *dev)
 		return NULL;
 
 	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
-	if (!pdata) {
-		dev_err(dev, "failed to allocate platform data\n");
+	if (!pdata)
 		return NULL;
-	}
 
 	if (of_property_read_u32(np, "x-size", &pdata->x_size)) {
 		dev_err(dev, "failed to get x-size property\n");
@@ -447,10 +444,8 @@ static int mms114_probe(struct i2c_client *client,
 	data = devm_kzalloc(&client->dev, sizeof(struct mms114_data),
 			    GFP_KERNEL);
 	input_dev = devm_input_allocate_device(&client->dev);
-	if (!data || !input_dev) {
-		dev_err(&client->dev, "Failed to allocate memory\n");
+	if (!data || !input_dev)
 		return -ENOMEM;
-	}
 
 	data->client = client;
 	data->input_dev = input_dev;
