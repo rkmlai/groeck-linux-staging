@@ -95,11 +95,8 @@ static int silead_ts_request_input_dev(struct silead_ts_data *data)
 	int error;
 
 	data->input = devm_input_allocate_device(dev);
-	if (!data->input) {
-		dev_err(dev,
-			"Failed to allocate input device\n");
+	if (!data->input)
 		return -ENOMEM;
-	}
 
 	input_set_abs_params(data->input, ABS_MT_POSITION_X, 0, 4095, 0, 0);
 	input_set_abs_params(data->input, ABS_MT_POSITION_Y, 0, 4095, 0, 0);
