@@ -189,9 +189,9 @@ static int bbc_beep_probe(struct platform_device *op)
 	struct device_node *dp;
 	int err = -ENOMEM;
 
-	state = kzalloc(sizeof(*state), GFP_KERNEL);
+	state = devm_kzalloc(&op->dev, sizeof(*state), GFP_KERNEL);
 	if (!state)
-		goto out_err;
+		return err;
 
 	state->name = "Sparc BBC Speaker";
 	state->event = bbc_spkr_event;
@@ -200,16 +200,16 @@ static int bbc_beep_probe(struct platform_device *op)
 	dp = of_find_node_by_path("/");
 	err = -ENODEV;
 	if (!dp)
-		goto out_free;
+		return err;
 
 	info = &state->u.bbc;
 	info->clock_freq = of_getintprop_default(dp, "clock-frequency", 0);
 	if (!info->clock_freq)
-		goto out_free;
+		return err;
 
 	info->regs = of_ioremap(&op->resource[0], 0, 6, "bbc beep");
 	if (!info->regs)
-		goto out_free;
+		return err;
 
 	platform_set_drvdata(op, state);
 
@@ -222,9 +222,6 @@ static int bbc_beep_probe(struct platform_device *op)
 out_clear_drvdata:
 	of_iounmap(&op->resource[0], info->regs, 6);
 
-out_free:
-	kfree(state);
-out_err:
 	return err;
 }
 
@@ -240,8 +237,6 @@ static int bbc_remove(struct platform_device *op)
 	input_unregister_device(input_dev);
 
 	of_iounmap(&op->resource[0], info->regs, 6);
-
-	kfree(state);
 
 	return 0;
 }
@@ -271,9 +266,9 @@ static int grover_beep_probe(struct platform_device *op)
 	struct grover_beep_info *info;
 	int err = -ENOMEM;
 
-	state = kzalloc(sizeof(*state), GFP_KERNEL);
+	state = devm_kzalloc(&op->dev, sizeof(*state), GFP_KERNEL);
 	if (!state)
-		goto out_err;
+		return err;
 
 	state->name = "Sparc Grover Speaker";
 	state->event = grover_spkr_event;
@@ -282,7 +277,7 @@ static int grover_beep_probe(struct platform_device *op)
 	info = &state->u.grover;
 	info->freq_regs = of_ioremap(&op->resource[2], 0, 2, "grover beep freq");
 	if (!info->freq_regs)
-		goto out_free;
+		return err;
 
 	info->enable_reg = of_ioremap(&op->resource[3], 0, 1, "grover beep enable");
 	if (!info->enable_reg)
@@ -301,9 +296,6 @@ out_clear_drvdata:
 
 out_unmap_freq_regs:
 	of_iounmap(&op->resource[2], info->freq_regs, 2);
-out_free:
-	kfree(state);
-out_err:
 	return err;
 }
 
@@ -320,8 +312,6 @@ static int grover_remove(struct platform_device *op)
 
 	of_iounmap(&op->resource[3], info->enable_reg, 1);
 	of_iounmap(&op->resource[2], info->freq_regs, 2);
-
-	kfree(state);
 
 	return 0;
 }
