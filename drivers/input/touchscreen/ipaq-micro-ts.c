@@ -92,10 +92,8 @@ static int micro_ts_probe(struct platform_device *pdev)
 	ts->micro = micro;
 
 	ts->input = devm_input_allocate_device(&pdev->dev);
-	if (!ts->input) {
-		dev_err(&pdev->dev, "failed to allocate input device\n");
+	if (!ts->input)
 		return -ENOMEM;
-	}
 
 	ts->input->name = "ipaq micro ts";
 	ts->input->open = micro_ts_open;
