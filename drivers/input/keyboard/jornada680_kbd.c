@@ -192,12 +192,8 @@ static int jornada680kbd_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	poll_dev = devm_input_allocate_polled_device(&pdev->dev);
-	if (!poll_dev) {
-		dev_err(&pdev->dev, "failed to allocate polled input device\n");
+	if (!poll_dev)
 		return -ENOMEM;
-	}
-
-	platform_set_drvdata(pdev, jornadakbd);
 
 	jornadakbd->poll_dev = poll_dev;
 
