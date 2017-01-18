@@ -69,7 +69,8 @@ static int pm80x_onkey_probe(struct platform_device *pdev)
 	struct pm80x_onkey_info *info;
 	int err;
 
-	info = kzalloc(sizeof(struct pm80x_onkey_info), GFP_KERNEL);
+	info = devm_kzalloc(&pdev->dev, sizeof(struct pm80x_onkey_info),
+			    GFP_KERNEL);
 	if (!info)
 		return -ENOMEM;
 
@@ -78,23 +79,18 @@ static int pm80x_onkey_probe(struct platform_device *pdev)
 	info->irq = platform_get_irq(pdev, 0);
 	if (info->irq < 0) {
 		dev_err(&pdev->dev, "No IRQ resource!\n");
-		err = -EINVAL;
-		goto out;
+		return -EINVAL;
 	}
 
 	info->map = info->pm80x->regmap;
 	if (!info->map) {
 		dev_err(&pdev->dev, "no regmap!\n");
-		err = -EINVAL;
-		goto out;
+		return -EINVAL;
 	}
 
-	info->idev = input_allocate_device();
-	if (!info->idev) {
-		dev_err(&pdev->dev, "Failed to allocate input dev\n");
-		err = -ENOMEM;
-		goto out;
-	}
+	info->idev = devm_input_allocate_device(&pdev->dev);
+	if (!info->idev)
+		return -ENOMEM;
 
 	info->idev->name = "88pm80x_on";
 	info->idev->phys = "88pm80x_on/input0";
@@ -108,7 +104,7 @@ static int pm80x_onkey_probe(struct platform_device *pdev)
 	if (err < 0) {
 		dev_err(&pdev->dev, "Failed to request IRQ: #%d: %d\n",
 			info->irq, err);
-		goto out_reg;
+		return err;
 	}
 
 	err = input_register_device(info->idev);
@@ -132,10 +128,6 @@ static int pm80x_onkey_probe(struct platform_device *pdev)
 
 out_irq:
 	pm80x_free_irq(info->pm80x, info->irq, info);
-out_reg:
-	input_free_device(info->idev);
-out:
-	kfree(info);
 	return err;
 }
 
@@ -143,10 +135,7 @@ static int pm80x_onkey_remove(struct platform_device *pdev)
 {
 	struct pm80x_onkey_info *info = platform_get_drvdata(pdev);
 
-	device_init_wakeup(&pdev->dev, 0);
 	pm80x_free_irq(info->pm80x, info->irq, info);
-	input_unregister_device(info->idev);
-	kfree(info);
 	return 0;
 }
 
