@@ -93,14 +93,14 @@ static irqreturn_t mpr_touchkey_interrupt(int irq, void *dev_id)
 	reg = i2c_smbus_read_byte_data(client, ELE_TOUCH_STATUS_1_ADDR);
 	if (reg < 0) {
 		dev_err(&client->dev, "i2c read error [%d]\n", reg);
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	reg <<= 8;
 	reg |= i2c_smbus_read_byte_data(client, ELE_TOUCH_STATUS_0_ADDR);
 	if (reg < 0) {
 		dev_err(&client->dev, "i2c read error [%d]\n", reg);
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	reg &= TOUCH_STATUS_MASK;
@@ -118,7 +118,6 @@ static irqreturn_t mpr_touchkey_interrupt(int irq, void *dev_id)
 	dev_dbg(&client->dev, "key %d %d %s\n", key_num, key_val,
 		pressed ? "pressed" : "released");
 
-out:
 	return IRQ_HANDLED;
 }
 
