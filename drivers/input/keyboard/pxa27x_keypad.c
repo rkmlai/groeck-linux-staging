@@ -138,14 +138,9 @@ static int pxa27x_keypad_matrix_key_parse_dt(struct pxa27x_keypad *keypad,
 	pdata->matrix_key_rows = rows;
 	pdata->matrix_key_cols = cols;
 
-	error = matrix_keypad_build_keymap(NULL, NULL,
-					   pdata->matrix_key_rows,
-					   pdata->matrix_key_cols,
-					   keypad->keycodes, input_dev);
-	if (error)
-		return error;
-
-	return 0;
+	return matrix_keypad_build_keymap(NULL, NULL, pdata->matrix_key_rows,
+					  pdata->matrix_key_cols,
+					  keypad->keycodes, input_dev);
 }
 
 static int pxa27x_keypad_direct_key_parse_dt(struct pxa27x_keypad *keypad,
@@ -162,13 +157,12 @@ static int pxa27x_keypad_direct_key_parse_dt(struct pxa27x_keypad *keypad,
 
 	error = of_property_read_u32(np, "marvell,direct-key-count",
 				     &pdata->direct_key_num);
-	if (error) {
+	if (error)
 		/*
 		 * If do not have marvel,direct-key-count defined,
 		 * it means direct key is not supported.
 		 */
 		return error == -EINVAL ? 0 : error;
-	}
 
 	error = of_property_read_u32(np, "marvell,direct-key-mask",
 				     &pdata->direct_key_mask);
@@ -290,10 +284,8 @@ static int pxa27x_keypad_build_keycode_from_dt(struct pxa27x_keypad *keypad)
 	int error;
 
 	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
-	if (!pdata) {
-		dev_err(dev, "failed to allocate memory for pdata\n");
+	if (!pdata)
 		return -ENOMEM;
-	}
 
 	error = pxa27x_keypad_matrix_key_parse_dt(keypad, pdata);
 	if (error) {
