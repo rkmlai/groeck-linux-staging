@@ -53,19 +53,19 @@ static int pcap_keys_probe(struct platform_device *pdev)
 	struct pcap_keys *pcap_keys;
 	struct input_dev *input_dev;
 
-	pcap_keys = kmalloc(sizeof(struct pcap_keys), GFP_KERNEL);
+	pcap_keys = devm_kmalloc(&pdev->dev, sizeof(struct pcap_keys),
+				 GFP_KERNEL);
 	if (!pcap_keys)
 		return err;
 
 	pcap_keys->pcap = dev_get_drvdata(pdev->dev.parent);
 
-	input_dev = input_allocate_device();
+	input_dev = devm_input_allocate_device(&pdev->dev);
 	if (!input_dev)
-		goto fail;
+		return err;
 
 	pcap_keys->input = input_dev;
 
-	platform_set_drvdata(pdev, pcap_keys);
 	input_dev->name = pdev->name;
 	input_dev->phys = "pcap-keys/input0";
 	input_dev->id.bustype = BUS_HOST;
@@ -77,48 +77,24 @@ static int pcap_keys_probe(struct platform_device *pdev)
 
 	err = input_register_device(input_dev);
 	if (err)
-		goto fail_allocate;
+		return err;
 
-	err = request_irq(pcap_to_irq(pcap_keys->pcap, PCAP_IRQ_ONOFF),
-			pcap_keys_handler, 0, "Power key", pcap_keys);
+	err = devm_request_irq(&pdev->dev,
+			       pcap_to_irq(pcap_keys->pcap, PCAP_IRQ_ONOFF),
+			       pcap_keys_handler, 0, "Power key", pcap_keys);
 	if (err)
-		goto fail_register;
+		return err;
 
-	err = request_irq(pcap_to_irq(pcap_keys->pcap, PCAP_IRQ_MIC),
-			pcap_keys_handler, 0, "Headphone button", pcap_keys);
-	if (err)
-		goto fail_pwrkey;
+	return devm_request_irq(&pdev->dev,
+				pcap_to_irq(pcap_keys->pcap, PCAP_IRQ_MIC),
+				pcap_keys_handler, 0, "Headphone button",
+				pcap_keys);
 
-	return 0;
-
-fail_pwrkey:
-	free_irq(pcap_to_irq(pcap_keys->pcap, PCAP_IRQ_ONOFF), pcap_keys);
-fail_register:
-	input_unregister_device(input_dev);
-	goto fail;
-fail_allocate:
-	input_free_device(input_dev);
-fail:
-	kfree(pcap_keys);
 	return err;
-}
-
-static int pcap_keys_remove(struct platform_device *pdev)
-{
-	struct pcap_keys *pcap_keys = platform_get_drvdata(pdev);
-
-	free_irq(pcap_to_irq(pcap_keys->pcap, PCAP_IRQ_ONOFF), pcap_keys);
-	free_irq(pcap_to_irq(pcap_keys->pcap, PCAP_IRQ_MIC), pcap_keys);
-
-	input_unregister_device(pcap_keys->input);
-	kfree(pcap_keys);
-
-	return 0;
 }
 
 static struct platform_driver pcap_keys_device_driver = {
 	.probe		= pcap_keys_probe,
-	.remove		= pcap_keys_remove,
 	.driver		= {
 		.name	= "pcap-keys",
 	}
