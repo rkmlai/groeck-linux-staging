@@ -213,10 +213,8 @@ static int twl4030_vibra_probe(struct platform_device *pdev)
 	INIT_WORK(&info->play_work, vibra_play_work);
 
 	info->input_dev = devm_input_allocate_device(&pdev->dev);
-	if (info->input_dev == NULL) {
-		dev_err(&pdev->dev, "couldn't allocate input device\n");
+	if (info->input_dev == NULL)
 		return -ENOMEM;
-	}
 
 	input_set_drvdata(info->input_dev, info);
 
