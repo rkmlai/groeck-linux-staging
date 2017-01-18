@@ -194,7 +194,7 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 		break;
 
 	default:
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	memset(rdbuf, 0, sizeof(rdbuf));
@@ -206,7 +206,7 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 	if (error) {
 		dev_err_ratelimited(dev, "Unable to fetch data, error: %d\n",
 				    error);
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	/* M09 does not send header or CRC */
@@ -216,11 +216,11 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 			dev_err_ratelimited(dev,
 					"Unexpected header: %02x%02x%02x!\n",
 					rdbuf[0], rdbuf[1], rdbuf[2]);
-			goto out;
+			return IRQ_HANDLED;
 		}
 
 		if (!edt_ft5x06_ts_check_crc(tsdata, rdbuf, datalen))
-			goto out;
+			return IRQ_HANDLED;
 	}
 
 	for (i = 0; i < tsdata->max_support_points; i++) {
@@ -254,7 +254,6 @@ static irqreturn_t edt_ft5x06_ts_isr(int irq, void *dev_id)
 	input_mt_report_pointer_emulation(tsdata->input, true);
 	input_sync(tsdata->input);
 
-out:
 	return IRQ_HANDLED;
 }
 
@@ -895,10 +894,8 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
 	dev_dbg(&client->dev, "probing for EDT FT5x06 I2C\n");
 
 	tsdata = devm_kzalloc(&client->dev, sizeof(*tsdata), GFP_KERNEL);
-	if (!tsdata) {
-		dev_err(&client->dev, "failed to allocate driver data.\n");
+	if (!tsdata)
 		return -ENOMEM;
-	}
 
 	chip_data = of_device_get_match_data(&client->dev);
 	if (!chip_data)
@@ -940,10 +937,8 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
 	}
 
 	input = devm_input_allocate_device(&client->dev);
-	if (!input) {
-		dev_err(&client->dev, "failed to allocate input device.\n");
+	if (!input)
 		return -ENOMEM;
-	}
 
 	mutex_init(&tsdata->mutex);
 	tsdata->client = client;
