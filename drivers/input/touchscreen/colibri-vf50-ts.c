@@ -277,9 +277,9 @@ static int vf50_ts_probe(struct platform_device *pdev)
 	if (IS_ERR(channels))
 		return PTR_ERR(channels);
 
-	error = devm_add_action(dev, vf50_ts_channel_release, channels);
+	error = devm_add_action_or_reset(dev, vf50_ts_channel_release,
+					 channels);
 	if (error) {
-		iio_channel_release_all(channels);
 		dev_err(dev, "Failed to register iio channel release action");
 		return error;
 	}
@@ -306,12 +306,8 @@ static int vf50_ts_probe(struct platform_device *pdev)
 		return error;
 
 	input = devm_input_allocate_device(dev);
-	if (!input) {
-		dev_err(dev, "Failed to allocate TS input device\n");
+	if (!input)
 		return -ENOMEM;
-	}
-
-	platform_set_drvdata(pdev, touchdev);
 
 	input->name = DRIVER_NAME;
 	input->id.bustype = BUS_HOST;
