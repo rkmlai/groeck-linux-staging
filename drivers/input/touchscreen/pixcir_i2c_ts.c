@@ -461,7 +461,7 @@ static int pixcir_i2c_ts_probe(struct i2c_client *client,
 		if (error)
 			return error;
 	} else {
-		dev_err(&client->dev, "platform data not defined\n");
+		dev_err(dev, "platform data not defined\n");
 		return -EINVAL;
 	}
 
@@ -471,10 +471,8 @@ static int pixcir_i2c_ts_probe(struct i2c_client *client,
 	}
 
 	input = devm_input_allocate_device(dev);
-	if (!input) {
-		dev_err(dev, "Failed to allocate input device\n");
+	if (!input)
 		return -ENOMEM;
-	}
 
 	tsdata->client = client;
 	tsdata->input = input;
@@ -483,7 +481,7 @@ static int pixcir_i2c_ts_probe(struct i2c_client *client,
 	input->id.bustype = BUS_I2C;
 	input->open = pixcir_input_open;
 	input->close = pixcir_input_close;
-	input->dev.parent = &client->dev;
+	input->dev.parent = dev;
 
 	if (pdata) {
 		input_set_abs_params(input, ABS_MT_POSITION_X, 0, pdata->x_max, 0, 0);
@@ -551,7 +549,8 @@ static int pixcir_i2c_ts_probe(struct i2c_client *client,
 	if (tsdata->gpio_enable)
 		msleep(100);
 
-	error = devm_request_threaded_irq(dev, client->irq, NULL, pixcir_ts_isr,
+	error = devm_request_threaded_irq(dev, client->irq, NULL,
+					  pixcir_ts_isr,
 					  IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
 					  client->name, tsdata);
 	if (error) {
