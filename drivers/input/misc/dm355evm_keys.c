@@ -170,6 +170,10 @@ static irqreturn_t dm355evm_keys_irq(int irq, void *_keys)
 	return IRQ_HANDLED;
 }
 
+static void dm355evm_keys_probe_keymap_cb(void *map) {
+	sparse_keymap_free(map);
+}
+
 /*----------------------------------------------------------------------*/
 
 static int dm355evm_keys_probe(struct platform_device *pdev)
@@ -179,8 +183,8 @@ static int dm355evm_keys_probe(struct platform_device *pdev)
 	int			status;
 
 	/* allocate instance struct and input dev */
-	keys = kzalloc(sizeof *keys, GFP_KERNEL);
-	input = input_allocate_device();
+	keys = devm_kzalloc(&pdev->dev, sizeof *keys, GFP_KERNEL);
+	input = devm_input_allocate_device(&pdev->dev);
 	if (!keys || !input) {
 		status = -ENOMEM;
 		goto fail1;
@@ -208,46 +212,32 @@ static int dm355evm_keys_probe(struct platform_device *pdev)
 	status = sparse_keymap_setup(input, dm355evm_keys, NULL);
 	if (status)
 		goto fail1;
+	status = devm_add_action_or_reset(&pdev->dev,
+					  dm355evm_keys_probe_keymap_cb,
+					  input);
+	if (status)
+		goto fail1;
 
 	/* REVISIT:  flush the event queue? */
 
-	status = request_threaded_irq(keys->irq, NULL, dm355evm_keys_irq,
-				      IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-				      dev_name(&pdev->dev), keys);
+	status = devm_request_threaded_irq(&pdev->dev, keys->irq, NULL,
+					   dm355evm_keys_irq,
+					   IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+					   dev_name(&pdev->dev), keys);
 	if (status < 0)
-		goto fail2;
+		goto fail1;
 
 	/* register */
 	status = input_register_device(input);
 	if (status < 0)
-		goto fail3;
-
-	platform_set_drvdata(pdev, keys);
+		goto fail1;
 
 	return 0;
 
-fail3:
-	free_irq(keys->irq, keys);
-fail2:
-	sparse_keymap_free(input);
 fail1:
-	input_free_device(input);
-	kfree(keys);
 	dev_err(&pdev->dev, "can't register, err %d\n", status);
 
 	return status;
-}
-
-static int dm355evm_keys_remove(struct platform_device *pdev)
-{
-	struct dm355evm_keys	*keys = platform_get_drvdata(pdev);
-
-	free_irq(keys->irq, keys);
-	sparse_keymap_free(keys->input);
-	input_unregister_device(keys->input);
-	kfree(keys);
-
-	return 0;
 }
 
 /* REVISIT:  add suspend/resume when DaVinci supports it.  The IRQ should
@@ -261,7 +251,6 @@ static int dm355evm_keys_remove(struct platform_device *pdev)
  */
 static struct platform_driver dm355evm_keys_driver = {
 	.probe		= dm355evm_keys_probe,
-	.remove		= dm355evm_keys_remove,
 	.driver		= {
 		.name	= "dm355evm_keys",
 	},
