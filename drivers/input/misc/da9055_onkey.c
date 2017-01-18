@@ -72,6 +72,10 @@ static irqreturn_t da9055_onkey_irq(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+static void da9055_onkey_probe_work_cb(void *w) {
+	cancel_delayed_work_sync(w);
+}
+
 static int da9055_onkey_probe(struct platform_device *pdev)
 {
 	struct da9055 *da9055 = dev_get_drvdata(pdev->dev.parent);
@@ -87,16 +91,12 @@ static int da9055_onkey_probe(struct platform_device *pdev)
 	}
 
 	onkey = devm_kzalloc(&pdev->dev, sizeof(*onkey), GFP_KERNEL);
-	if (!onkey) {
-		dev_err(&pdev->dev, "Failed to allocate memory\n");
+	if (!onkey)
 		return -ENOMEM;
-	}
 
-	input_dev = input_allocate_device();
-	if (!input_dev) {
-		dev_err(&pdev->dev, "Failed to allocate memory\n");
+	input_dev = devm_input_allocate_device(&pdev->dev);
+	if (!input_dev)
 		return -ENOMEM;
-	}
 
 	onkey->input = input_dev;
 	onkey->da9055 = da9055;
@@ -108,35 +108,32 @@ static int da9055_onkey_probe(struct platform_device *pdev)
 	__set_bit(KEY_POWER, input_dev->keybit);
 
 	INIT_DELAYED_WORK(&onkey->work, da9055_onkey_work);
+	err = devm_add_action_or_reset(&pdev->dev, da9055_onkey_probe_work_cb,
+				       &onkey->work);
+	if (err)
+		return err;
 
-	err = request_threaded_irq(irq, NULL, da9055_onkey_irq,
-				   IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
-				   "ONKEY", onkey);
+	err = devm_request_threaded_irq(&pdev->dev, irq, NULL,
+					da9055_onkey_irq,
+					IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
+					"ONKEY", onkey);
 	if (err < 0) {
 		dev_err(&pdev->dev,
 			"Failed to register ONKEY IRQ %d, error = %d\n",
 			irq, err);
-		goto err_free_input;
+		return err;
 	}
 
 	err = input_register_device(input_dev);
 	if (err) {
 		dev_err(&pdev->dev, "Unable to register input device, %d\n",
 			err);
-		goto err_free_irq;
+		return err;
 	}
 
 	platform_set_drvdata(pdev, onkey);
 
 	return 0;
-
-err_free_irq:
-	free_irq(irq, onkey);
-	cancel_delayed_work_sync(&onkey->work);
-err_free_input:
-	input_free_device(input_dev);
-
-	return err;
 }
 
 static int da9055_onkey_remove(struct platform_device *pdev)
@@ -145,9 +142,6 @@ static int da9055_onkey_remove(struct platform_device *pdev)
 	int irq = platform_get_irq_byname(pdev, "ONKEY");
 
 	irq = regmap_irq_get_virq(onkey->da9055->irq_data, irq);
-	free_irq(irq, onkey);
-	cancel_delayed_work_sync(&onkey->work);
-	input_unregister_device(onkey->input);
 
 	return 0;
 }
