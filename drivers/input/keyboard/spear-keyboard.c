@@ -197,10 +197,8 @@ static int spear_kbd_probe(struct platform_device *pdev)
 	}
 
 	kbd = devm_kzalloc(&pdev->dev, sizeof(*kbd), GFP_KERNEL);
-	if (!kbd) {
-		dev_err(&pdev->dev, "not enough memory for driver data\n");
+	if (!kbd)
 		return -ENOMEM;
-	}
 
 	input_dev = devm_input_allocate_device(&pdev->dev);
 	if (!input_dev) {
