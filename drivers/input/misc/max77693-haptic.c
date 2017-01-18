@@ -348,10 +348,8 @@ static int max77693_haptic_probe(struct platform_device *pdev)
 
 	/* Initialize input device for haptic device */
 	haptic->input_dev = devm_input_allocate_device(&pdev->dev);
-	if (!haptic->input_dev) {
-		dev_err(&pdev->dev, "failed to allocate input device\n");
+	if (!haptic->input_dev)
 		return -ENOMEM;
-	}
 
 	haptic->input_dev->name = "max77693-haptic";
 	haptic->input_dev->id.version = 1;
