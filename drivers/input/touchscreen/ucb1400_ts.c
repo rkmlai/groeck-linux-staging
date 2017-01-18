@@ -323,18 +323,16 @@ static int ucb1400_ts_probe(struct platform_device *pdev)
 	int error, x_res, y_res;
 	u16 fcsr;
 
-	ucb->ts_idev = input_allocate_device();
-	if (!ucb->ts_idev) {
-		error = -ENOMEM;
-		goto err;
-	}
+	ucb->ts_idev = devm_input_allocate_device(&pdev->dev);
+	if (!ucb->ts_idev)
+		return -ENOMEM;
 
 	/* Only in case the IRQ line wasn't supplied, try detecting it */
 	if (ucb->irq < 0) {
 		error = ucb1400_ts_detect_irq(ucb, pdev);
 		if (error) {
 			dev_err(&pdev->dev, "IRQ probe failed\n");
-			goto err_free_devs;
+			return error;
 		}
 	}
 	dev_dbg(&pdev->dev, "found IRQ %d\n", ucb->irq);
@@ -373,37 +371,17 @@ static int ucb1400_ts_probe(struct platform_device *pdev)
 
 	ucb1400_ts_stop(ucb);
 
-	error = request_threaded_irq(ucb->irq, NULL, ucb1400_irq,
-				     IRQF_TRIGGER_RISING | IRQF_ONESHOT,
-				     "UCB1400", ucb);
+	error = devm_request_threaded_irq(&pdev->dev, ucb->irq, NULL,
+					  ucb1400_irq,
+					  IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+					  "UCB1400", ucb);
 	if (error) {
 		dev_err(&pdev->dev,
 			"unable to grab irq%d: %d\n", ucb->irq, error);
-		goto err_free_devs;
+		return error;
 	}
 
-	error = input_register_device(ucb->ts_idev);
-	if (error)
-		goto err_free_irq;
-
-	return 0;
-
-err_free_irq:
-	free_irq(ucb->irq, ucb);
-err_free_devs:
-	input_free_device(ucb->ts_idev);
-err:
-	return error;
-}
-
-static int ucb1400_ts_remove(struct platform_device *pdev)
-{
-	struct ucb1400_ts *ucb = dev_get_platdata(&pdev->dev);
-
-	free_irq(ucb->irq, ucb);
-	input_unregister_device(ucb->ts_idev);
-
-	return 0;
+	return input_register_device(ucb->ts_idev);
 }
 
 static int __maybe_unused ucb1400_ts_suspend(struct device *dev)
@@ -439,7 +417,6 @@ static SIMPLE_DEV_PM_OPS(ucb1400_ts_pm_ops,
 
 static struct platform_driver ucb1400_ts_driver = {
 	.probe	= ucb1400_ts_probe,
-	.remove	= ucb1400_ts_remove,
 	.driver	= {
 		.name	= "ucb1400_ts",
 		.pm	= &ucb1400_ts_pm_ops,
