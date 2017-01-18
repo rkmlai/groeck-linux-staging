@@ -108,27 +108,23 @@ static int pxa930_rotary_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	r = kzalloc(sizeof(struct pxa930_rotary), GFP_KERNEL);
+	r = devm_kzalloc(&pdev->dev, sizeof(struct pxa930_rotary), GFP_KERNEL);
 	if (!r)
 		return -ENOMEM;
 
-	r->mmio_base = ioremap_nocache(res->start, resource_size(res));
+	r->mmio_base = devm_ioremap_nocache(&pdev->dev, res->start,
+					    resource_size(res));
 	if (r->mmio_base == NULL) {
 		dev_err(&pdev->dev, "failed to remap IO memory\n");
-		err = -ENXIO;
-		goto failed_free;
+		return -ENXIO;
 	}
 
 	r->pdata = pdata;
-	platform_set_drvdata(pdev, r);
 
 	/* allocate and register the input device */
-	input_dev = input_allocate_device();
-	if (!input_dev) {
-		dev_err(&pdev->dev, "failed to allocate input device\n");
-		err = -ENOMEM;
-		goto failed_free_io;
-	}
+	input_dev = devm_input_allocate_device(&pdev->dev);
+	if (!input_dev)
+		return -ENOMEM;
 
 	input_dev->name = pdev->name;
 	input_dev->id.bustype = BUS_HOST;
@@ -148,40 +144,18 @@ static int pxa930_rotary_probe(struct platform_device *pdev)
 	r->input_dev = input_dev;
 	input_set_drvdata(input_dev, r);
 
-	err = request_irq(irq, rotary_irq, 0,
-			"enhanced rotary", r);
+	err = devm_request_irq(&pdev->dev, irq, rotary_irq, 0,
+			       "enhanced rotary", r);
 	if (err) {
 		dev_err(&pdev->dev, "failed to request IRQ\n");
-		goto failed_free_input;
+		return err;
 	}
 
 	err = input_register_device(input_dev);
 	if (err) {
 		dev_err(&pdev->dev, "failed to register input device\n");
-		goto failed_free_irq;
+		return err;
 	}
-
-	return 0;
-
-failed_free_irq:
-	free_irq(irq, r);
-failed_free_input:
-	input_free_device(input_dev);
-failed_free_io:
-	iounmap(r->mmio_base);
-failed_free:
-	kfree(r);
-	return err;
-}
-
-static int pxa930_rotary_remove(struct platform_device *pdev)
-{
-	struct pxa930_rotary *r = platform_get_drvdata(pdev);
-
-	free_irq(platform_get_irq(pdev, 0), r);
-	input_unregister_device(r->input_dev);
-	iounmap(r->mmio_base);
-	kfree(r);
 
 	return 0;
 }
@@ -191,7 +165,6 @@ static struct platform_driver pxa930_rotary_driver = {
 		.name	= "pxa930-rotary",
 	},
 	.probe		= pxa930_rotary_probe,
-	.remove		= pxa930_rotary_remove,
 };
 module_platform_driver(pxa930_rotary_driver);
 
