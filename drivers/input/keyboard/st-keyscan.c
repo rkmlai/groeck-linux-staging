@@ -140,10 +140,8 @@ static int keyscan_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	input_dev = devm_input_allocate_device(&pdev->dev);
-	if (!input_dev) {
-		dev_err(&pdev->dev, "failed to allocate the input device\n");
+	if (!input_dev)
 		return -ENOMEM;
-	}
 
 	input_dev->name = pdev->name;
 	input_dev->phys = "keyscan-keys/input0";
