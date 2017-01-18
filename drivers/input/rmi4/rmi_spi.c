@@ -336,13 +336,8 @@ static int rmi_spi_of_probe(struct spi_device *spi,
 	if (retval)
 		return retval;
 
-	retval = rmi_of_property_read_u32(dev,
-			&pdata->spi_data.write_delay_us,
-			"spi-tx-delay-us", 1);
-	if (retval)
-		return retval;
-
-	return 0;
+	return rmi_of_property_read_u32(dev, &pdata->spi_data.write_delay_us,
+					"spi-tx-delay-us", 1);
 }
 
 static const struct of_device_id rmi_spi_of_match[] = {
