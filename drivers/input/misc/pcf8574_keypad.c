@@ -92,16 +92,13 @@ static int pcf8574_kp_probe(struct i2c_client *client, const struct i2c_device_i
 		return -ENODEV;
 	}
 
-	lp = kzalloc(sizeof(*lp), GFP_KERNEL);
+	lp = devm_kzalloc(&client->dev, sizeof(*lp), GFP_KERNEL);
 	if (!lp)
 		return -ENOMEM;
 
-	idev = input_allocate_device();
-	if (!idev) {
-		dev_err(&client->dev, "Can't allocate input device\n");
-		ret = -ENOMEM;
-		goto fail_allocate;
-	}
+	idev = devm_input_allocate_device(&client->dev);
+	if (!idev)
+		return -ENOMEM;
 
 	lp->idev = idev;
 	lp->client = client;
@@ -131,41 +128,20 @@ static int pcf8574_kp_probe(struct i2c_client *client, const struct i2c_device_i
 
 	lp->laststate = read_state(lp);
 
-	ret = request_threaded_irq(client->irq, NULL, pcf8574_kp_irq_handler,
-				   IRQF_TRIGGER_LOW | IRQF_ONESHOT,
-				   DRV_NAME, lp);
+	ret = devm_request_threaded_irq(&client->dev, client->irq, NULL,
+					pcf8574_kp_irq_handler,
+					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+					DRV_NAME, lp);
 	if (ret) {
 		dev_err(&client->dev, "IRQ %d is not free\n", client->irq);
-		goto fail_free_device;
+		return ret;
 	}
 
 	ret = input_register_device(idev);
 	if (ret) {
 		dev_err(&client->dev, "input_register_device() failed\n");
-		goto fail_free_irq;
+		return ret;
 	}
-
-	i2c_set_clientdata(client, lp);
-	return 0;
-
- fail_free_irq:
-	free_irq(client->irq, lp);
- fail_free_device:
-	input_free_device(idev);
- fail_allocate:
-	kfree(lp);
-
-	return ret;
-}
-
-static int pcf8574_kp_remove(struct i2c_client *client)
-{
-	struct kp_data *lp = i2c_get_clientdata(client);
-
-	free_irq(client->irq, lp);
-
-	input_unregister_device(lp->idev);
-	kfree(lp);
 
 	return 0;
 }
@@ -213,7 +189,6 @@ static struct i2c_driver pcf8574_kp_driver = {
 #endif
 	},
 	.probe    = pcf8574_kp_probe,
-	.remove   = pcf8574_kp_remove,
 	.id_table = pcf8574_kp_id,
 };
 
