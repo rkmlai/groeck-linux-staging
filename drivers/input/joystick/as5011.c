@@ -143,17 +143,16 @@ static irqreturn_t as5011_axis_interrupt(int irq, void *dev_id)
 
 	error = as5011_i2c_read(as5011->i2c_client, AS5011_X_RES_INT, &x);
 	if (error < 0)
-		goto out;
+		return IRQ_HANDLED;
 
 	error = as5011_i2c_read(as5011->i2c_client, AS5011_Y_RES_INT, &y);
 	if (error < 0)
-		goto out;
+		return IRQ_HANDLED;
 
 	input_report_abs(as5011->input_dev, ABS_X, x);
 	input_report_abs(as5011->input_dev, ABS_Y, y);
 	input_sync(as5011->input_dev);
 
-out:
 	return IRQ_HANDLED;
 }
 
@@ -251,14 +250,11 @@ static int as5011_probe(struct i2c_client *client,
 		return -ENODEV;
 	}
 
-	as5011 = kmalloc(sizeof(struct as5011_device), GFP_KERNEL);
-	input_dev = input_allocate_device();
-	if (!as5011 || !input_dev) {
-		dev_err(&client->dev,
-			"Can't allocate memory for device structure\n");
-		error = -ENOMEM;
-		goto err_free_mem;
-	}
+	as5011 = devm_kmalloc(&client->dev, sizeof(struct as5011_device),
+			      GFP_KERNEL);
+	input_dev = devm_input_allocate_device(&client->dev);
+	if (!as5011 || !input_dev)
+		return -ENOMEM;
 
 	as5011->i2c_client = client;
 	as5011->input_dev = input_dev;
@@ -278,80 +274,51 @@ static int as5011_probe(struct i2c_client *client,
 	input_set_abs_params(as5011->input_dev, ABS_Y,
 		AS5011_MIN_AXIS, AS5011_MAX_AXIS, AS5011_FUZZ, AS5011_FLAT);
 
-	error = gpio_request(as5011->button_gpio, "AS5011 button");
+	error = devm_gpio_request(&client->dev, as5011->button_gpio,
+				  "AS5011 button");
 	if (error < 0) {
 		dev_err(&client->dev, "Failed to request button gpio\n");
-		goto err_free_mem;
+		return error;
 	}
 
 	irq = gpio_to_irq(as5011->button_gpio);
 	if (irq < 0) {
 		dev_err(&client->dev,
 			"Failed to get irq number for button gpio\n");
-		error = irq;
-		goto err_free_button_gpio;
+		return irq;
 	}
 
 	as5011->button_irq = irq;
 
-	error = request_threaded_irq(as5011->button_irq,
-				     NULL, as5011_button_interrupt,
-				     IRQF_TRIGGER_RISING |
-					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-				     "as5011_button", as5011);
+	error = devm_request_threaded_irq(&client->dev, as5011->button_irq,
+					  NULL, as5011_button_interrupt,
+					  IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+					  "as5011_button", as5011);
 	if (error < 0) {
 		dev_err(&client->dev,
 			"Can't allocate button irq %d\n", as5011->button_irq);
-		goto err_free_button_gpio;
+		return error;
 	}
 
 	error = as5011_configure_chip(as5011, plat_data);
 	if (error)
-		goto err_free_button_irq;
+		return error;
 
-	error = request_threaded_irq(as5011->axis_irq, NULL,
-				     as5011_axis_interrupt,
-				     plat_data->axis_irqflags | IRQF_ONESHOT,
-				     "as5011_joystick", as5011);
+	error = devm_request_threaded_irq(&client->dev, as5011->axis_irq,
+					  NULL, as5011_axis_interrupt,
+					  plat_data->axis_irqflags | IRQF_ONESHOT,
+					  "as5011_joystick", as5011);
 	if (error) {
 		dev_err(&client->dev,
 			"Can't allocate axis irq %d\n", plat_data->axis_irq);
-		goto err_free_button_irq;
+		return error;
 	}
 
 	error = input_register_device(as5011->input_dev);
 	if (error) {
 		dev_err(&client->dev, "Failed to register input device\n");
-		goto err_free_axis_irq;
+		return error;
 	}
-
-	i2c_set_clientdata(client, as5011);
-
-	return 0;
-
-err_free_axis_irq:
-	free_irq(as5011->axis_irq, as5011);
-err_free_button_irq:
-	free_irq(as5011->button_irq, as5011);
-err_free_button_gpio:
-	gpio_free(as5011->button_gpio);
-err_free_mem:
-	input_free_device(input_dev);
-	kfree(as5011);
-
-	return error;
-}
-
-static int as5011_remove(struct i2c_client *client)
-{
-	struct as5011_device *as5011 = i2c_get_clientdata(client);
-
-	free_irq(as5011->axis_irq, as5011);
-	free_irq(as5011->button_irq, as5011);
-	gpio_free(as5011->button_gpio);
-
-	input_unregister_device(as5011->input_dev);
-	kfree(as5011);
 
 	return 0;
 }
@@ -367,7 +334,6 @@ static struct i2c_driver as5011_driver = {
 		.name = "as5011",
 	},
 	.probe		= as5011_probe,
-	.remove		= as5011_remove,
 	.id_table	= as5011_id,
 };
 
