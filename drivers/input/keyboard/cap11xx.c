@@ -189,11 +189,11 @@ static irqreturn_t cap11xx_thread_func(int irq_num, void *data)
 	 */
 	ret = regmap_update_bits(priv->regmap, CAP11XX_REG_MAIN_CONTROL, 1, 0);
 	if (ret < 0)
-		goto out;
+		return IRQ_HANDLED;
 
 	ret = regmap_read(priv->regmap, CAP11XX_REG_SENSOR_INPUT, &status);
 	if (ret < 0)
-		goto out;
+		return IRQ_HANDLED;
 
 	for (i = 0; i < priv->idev->keycodemax; i++)
 		input_report_key(priv->idev, priv->keycodes[i],
@@ -201,7 +201,6 @@ static irqreturn_t cap11xx_thread_func(int irq_num, void *data)
 
 	input_sync(priv->idev);
 
-out:
 	return IRQ_HANDLED;
 }
 
@@ -392,7 +391,6 @@ static int cap11xx_i2c_probe(struct i2c_client *i2c_client,
 		return error;
 
 	dev_info(dev, "CAP11XX detected, revision 0x%02x\n", rev);
-	i2c_set_clientdata(i2c_client, priv);
 	node = dev->of_node;
 
 	if (!of_property_read_u32(node, "microchip,sensor-gain", &gain32)) {
@@ -476,12 +474,8 @@ static int cap11xx_i2c_probe(struct i2c_client *i2c_client,
 		return -ENXIO;
 	}
 
-	error = devm_request_threaded_irq(dev, irq, NULL, cap11xx_thread_func,
-					  IRQF_ONESHOT, dev_name(dev), priv);
-	if (error)
-		return error;
-
-	return 0;
+	return devm_request_threaded_irq(dev, irq, NULL, cap11xx_thread_func,
+					 IRQF_ONESHOT, dev_name(dev), priv);
 }
 
 static const struct of_device_id cap11xx_dt_ids[] = {
