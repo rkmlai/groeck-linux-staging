@@ -257,12 +257,7 @@ static int sun4i_lradc_probe(struct platform_device *pdev)
 	if (error)
 		return error;
 
-	error = input_register_device(lradc->input);
-	if (error)
-		return error;
-
-	platform_set_drvdata(pdev, lradc);
-	return 0;
+	return input_register_device(lradc->input);
 }
 
 static const struct of_device_id sun4i_lradc_of_match[] = {
