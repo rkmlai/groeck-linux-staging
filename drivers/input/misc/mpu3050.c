@@ -288,11 +288,7 @@ static int mpu3050_hw_init(struct mpu3050_sensor *sensor)
 	reg = MPU3050_DEFAULT_FS_RANGE;
 	reg |= MPU3050_DLPF_CFG_42HZ << 3;
 	reg |= MPU3050_EXT_SYNC_NONE << 5;
-	ret = i2c_smbus_write_byte_data(client, MPU3050_DLPF_FS_SYNC, reg);
-	if (ret < 0)
-		return ret;
-
-	return 0;
+	return i2c_smbus_write_byte_data(client, MPU3050_DLPF_FS_SYNC, reg);
 }
 
 /**
@@ -313,13 +309,11 @@ static int mpu3050_probe(struct i2c_client *client,
 	int ret;
 	int error;
 
-	sensor = kzalloc(sizeof(struct mpu3050_sensor), GFP_KERNEL);
-	idev = input_allocate_device();
-	if (!sensor || !idev) {
-		dev_err(&client->dev, "failed to allocate driver data\n");
-		error = -ENOMEM;
-		goto err_free_mem;
-	}
+	sensor = devm_kzalloc(&client->dev, sizeof(struct mpu3050_sensor),
+			      GFP_KERNEL);
+	idev = devm_input_allocate_device(&client->dev);
+	if (!sensor || !idev)
+		return -ENOMEM;
 
 	sensor->client = client;
 	sensor->dev = &client->dev;
@@ -331,14 +325,12 @@ static int mpu3050_probe(struct i2c_client *client,
 	ret = i2c_smbus_read_byte_data(client, MPU3050_CHIP_ID_REG);
 	if (ret < 0) {
 		dev_err(&client->dev, "failed to detect device\n");
-		error = -ENXIO;
-		goto err_free_mem;
+		return -ENXIO;
 	}
 
 	if (ret != MPU3050_CHIP_ID) {
 		dev_err(&client->dev, "unsupported chip id\n");
-		error = -ENXIO;
-		goto err_free_mem;
+		return -ENXIO;
 	}
 
 	idev->name = "MPU3050";
@@ -364,10 +356,10 @@ static int mpu3050_probe(struct i2c_client *client,
 	if (error)
 		goto err_pm_set_suspended;
 
-	error = request_threaded_irq(client->irq,
-				     NULL, mpu3050_interrupt_thread,
-				     IRQF_TRIGGER_RISING | IRQF_ONESHOT,
-				     "mpu3050", sensor);
+	error = devm_request_threaded_irq(&client->dev, client->irq, NULL,
+					  mpu3050_interrupt_thread,
+					  IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+					  "mpu3050", sensor);
 	if (error) {
 		dev_err(&client->dev,
 			"can't get IRQ %d, error %d\n", client->irq, error);
@@ -377,22 +369,16 @@ static int mpu3050_probe(struct i2c_client *client,
 	error = input_register_device(idev);
 	if (error) {
 		dev_err(&client->dev, "failed to register input device\n");
-		goto err_free_irq;
+		goto err_pm_set_suspended;
 	}
 
 	pm_runtime_enable(&client->dev);
 	pm_runtime_set_autosuspend_delay(&client->dev, MPU3050_AUTO_DELAY);
-	i2c_set_clientdata(client, sensor);
 
 	return 0;
 
-err_free_irq:
-	free_irq(client->irq, sensor);
 err_pm_set_suspended:
 	pm_runtime_set_suspended(&client->dev);
-err_free_mem:
-	input_free_device(idev);
-	kfree(sensor);
 	return error;
 }
 
@@ -404,14 +390,8 @@ err_free_mem:
  */
 static int mpu3050_remove(struct i2c_client *client)
 {
-	struct mpu3050_sensor *sensor = i2c_get_clientdata(client);
-
 	pm_runtime_disable(&client->dev);
 	pm_runtime_set_suspended(&client->dev);
-
-	free_irq(client->irq, sensor);
-	input_unregister_device(sensor->idev);
-	kfree(sensor);
 
 	return 0;
 }
