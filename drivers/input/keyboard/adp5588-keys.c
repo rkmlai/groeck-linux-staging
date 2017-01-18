@@ -428,6 +428,10 @@ static void adp5588_report_switch_state(struct adp5588_kpad *kpad)
 }
 
 
+static void adp5588_probe_work_cb(void *w) {
+	cancel_delayed_work_sync(w);
+}
+
 static int adp5588_probe(struct i2c_client *client,
 			 const struct i2c_device_id *id)
 {
@@ -496,22 +500,22 @@ static int adp5588_probe(struct i2c_client *client,
 		return -EINVAL;
 	}
 
-	kpad = kzalloc(sizeof(*kpad), GFP_KERNEL);
-	input = input_allocate_device();
-	if (!kpad || !input) {
-		error = -ENOMEM;
-		goto err_free_mem;
-	}
+	kpad = devm_kzalloc(&client->dev, sizeof(*kpad), GFP_KERNEL);
+	input = devm_input_allocate_device(&client->dev);
+	if (!kpad || !input)
+		return -ENOMEM;
 
 	kpad->client = client;
 	kpad->input = input;
 	INIT_DELAYED_WORK(&kpad->work, adp5588_work);
+	error = devm_add_action_or_reset(&client->dev, adp5588_probe_work_cb,
+					 &kpad->work);
+	if (error)
+		return error;
 
 	ret = adp5588_read(client, DEV_ID);
-	if (ret < 0) {
-		error = ret;
-		goto err_free_mem;
-	}
+	if (ret < 0)
+		return ret;
 
 	revid = (u8) ret & ADP5588_DEVICE_ID_MASK;
 	if (WA_DELAYED_READOUT_REVID(revid))
@@ -557,45 +561,33 @@ static int adp5588_probe(struct i2c_client *client,
 	error = input_register_device(input);
 	if (error) {
 		dev_err(&client->dev, "unable to register input device\n");
-		goto err_free_mem;
+		return error;
 	}
 
-	error = request_irq(client->irq, adp5588_irq,
-			    IRQF_TRIGGER_FALLING,
-			    client->dev.driver->name, kpad);
+	error = devm_request_irq(&client->dev, client->irq, adp5588_irq,
+				 IRQF_TRIGGER_FALLING,
+				 client->dev.driver->name, kpad);
 	if (error) {
 		dev_err(&client->dev, "irq %d busy?\n", client->irq);
-		goto err_unreg_dev;
+		return error;
 	}
 
 	error = adp5588_setup(client);
 	if (error)
-		goto err_free_irq;
+		return error;
 
 	if (kpad->gpimapsize)
 		adp5588_report_switch_state(kpad);
 
 	error = adp5588_gpio_add(kpad);
 	if (error)
-		goto err_free_irq;
+		return error;
 
 	device_init_wakeup(&client->dev, 1);
 	i2c_set_clientdata(client, kpad);
 
 	dev_info(&client->dev, "Rev.%d keypad, irq %d\n", revid, client->irq);
 	return 0;
-
- err_free_irq:
-	free_irq(client->irq, kpad);
-	cancel_delayed_work_sync(&kpad->work);
- err_unreg_dev:
-	input_unregister_device(input);
-	input = NULL;
- err_free_mem:
-	input_free_device(input);
-	kfree(kpad);
-
-	return error;
 }
 
 static int adp5588_remove(struct i2c_client *client)
@@ -603,11 +595,7 @@ static int adp5588_remove(struct i2c_client *client)
 	struct adp5588_kpad *kpad = i2c_get_clientdata(client);
 
 	adp5588_write(client, CFG, 0);
-	free_irq(client->irq, kpad);
-	cancel_delayed_work_sync(&kpad->work);
-	input_unregister_device(kpad->input);
 	adp5588_gpio_remove(kpad);
-	kfree(kpad);
 
 	return 0;
 }
