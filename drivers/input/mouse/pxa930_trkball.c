@@ -161,42 +161,37 @@ static int pxa930_trkball_probe(struct platform_device *pdev)
 		return -ENXIO;
 	}
 
-	trkball = kzalloc(sizeof(struct pxa930_trkball), GFP_KERNEL);
+	trkball = devm_kzalloc(&pdev->dev, sizeof(struct pxa930_trkball),
+			       GFP_KERNEL);
 	if (!trkball)
 		return -ENOMEM;
 
 	trkball->pdata = dev_get_platdata(&pdev->dev);
 	if (!trkball->pdata) {
 		dev_err(&pdev->dev, "no platform data defined\n");
-		error = -EINVAL;
-		goto failed;
+		return -EINVAL;
 	}
 
-	trkball->mmio_base = ioremap_nocache(res->start, resource_size(res));
+	trkball->mmio_base = devm_ioremap_nocache(&pdev->dev, res->start,
+						  resource_size(res));
 	if (!trkball->mmio_base) {
 		dev_err(&pdev->dev, "failed to ioremap registers\n");
-		error = -ENXIO;
-		goto failed;
+		return -ENXIO;
 	}
 
 	/* held the module in reset, will be enabled in open() */
 	pxa930_trkball_disable(trkball);
 
-	error = request_irq(irq, pxa930_trkball_interrupt, 0,
-			    pdev->name, trkball);
+	error = devm_request_irq(&pdev->dev, irq, pxa930_trkball_interrupt, 0,
+				 pdev->name, trkball);
 	if (error) {
 		dev_err(&pdev->dev, "failed to request irq: %d\n", error);
-		goto failed_free_io;
+		return error;
 	}
 
-	platform_set_drvdata(pdev, trkball);
-
-	input = input_allocate_device();
-	if (!input) {
-		dev_err(&pdev->dev, "failed to allocate input device\n");
-		error = -ENOMEM;
-		goto failed_free_irq;
-	}
+	input = devm_input_allocate_device(&pdev->dev);
+	if (!input)
+		return -ENOMEM;
 
 	input->name = pdev->name;
 	input->id.bustype = BUS_HOST;
@@ -213,31 +208,8 @@ static int pxa930_trkball_probe(struct platform_device *pdev)
 	error = input_register_device(input);
 	if (error) {
 		dev_err(&pdev->dev, "unable to register input device\n");
-		goto failed_free_input;
+		return error;
 	}
-
-	return 0;
-
-failed_free_input:
-	input_free_device(input);
-failed_free_irq:
-	free_irq(irq, trkball);
-failed_free_io:
-	iounmap(trkball->mmio_base);
-failed:
-	kfree(trkball);
-	return error;
-}
-
-static int pxa930_trkball_remove(struct platform_device *pdev)
-{
-	struct pxa930_trkball *trkball = platform_get_drvdata(pdev);
-	int irq = platform_get_irq(pdev, 0);
-
-	input_unregister_device(trkball->input);
-	free_irq(irq, trkball);
-	iounmap(trkball->mmio_base);
-	kfree(trkball);
 
 	return 0;
 }
@@ -247,7 +219,6 @@ static struct platform_driver pxa930_trkball_driver = {
 		.name	= "pxa930-trkball",
 	},
 	.probe		= pxa930_trkball_probe,
-	.remove		= pxa930_trkball_remove,
 };
 module_platform_driver(pxa930_trkball_driver);
 
