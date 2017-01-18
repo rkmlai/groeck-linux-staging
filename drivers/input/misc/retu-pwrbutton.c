@@ -69,21 +69,11 @@ static int retu_pwrbutton_probe(struct platform_device *pdev)
 	if (error)
 		return error;
 
-	error = input_register_device(idev);
-	if (error)
-		return error;
-
-	return 0;
-}
-
-static int retu_pwrbutton_remove(struct platform_device *pdev)
-{
-	return 0;
+	return input_register_device(idev);
 }
 
 static struct platform_driver retu_pwrbutton_driver = {
 	.probe		= retu_pwrbutton_probe,
-	.remove		= retu_pwrbutton_remove,
 	.driver		= {
 		.name	= "retu-pwrbutton",
 	},
