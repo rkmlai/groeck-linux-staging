@@ -68,7 +68,7 @@ static irqreturn_t mcs_touchkey_interrupt(int irq, void *dev_id)
 	val = i2c_smbus_read_byte_data(client, chip->status_reg);
 	if (val < 0) {
 		dev_err(&client->dev, "i2c read error [%d]\n", val);
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	pressed = (val & (1 << chip->pressbit)) >> chip->pressbit;
@@ -79,7 +79,7 @@ static irqreturn_t mcs_touchkey_interrupt(int irq, void *dev_id)
 	if (pressed) {
 		key_val = val & (0xff >> (8 - chip->pressbit));
 		if (!key_val)
-			goto out;
+			return IRQ_HANDLED;
 		key_val -= chip->baseval;
 		data->key_code = data->keycodes[key_val];
 		data->key_val = key_val;
@@ -92,8 +92,12 @@ static irqreturn_t mcs_touchkey_interrupt(int irq, void *dev_id)
 	dev_dbg(&client->dev, "key %d %d %s\n", data->key_val, data->key_code,
 		pressed ? "pressed" : "released");
 
- out:
 	return IRQ_HANDLED;
+}
+
+static void mcs_touchkey_probe_poweroff_cb(void *_d) {
+	struct mcs_touchkey_data *d = _d;
+	d->poweron(false);
 }
 
 static int mcs_touchkey_probe(struct i2c_client *client,
@@ -113,15 +117,12 @@ static int mcs_touchkey_probe(struct i2c_client *client,
 		return -EINVAL;
 	}
 
-	data = kzalloc(sizeof(struct mcs_touchkey_data) +
-			sizeof(data->keycodes[0]) * (pdata->key_maxval + 1),
-			GFP_KERNEL);
-	input_dev = input_allocate_device();
-	if (!data || !input_dev) {
-		dev_err(&client->dev, "Failed to allocate memory\n");
-		error = -ENOMEM;
-		goto err_free_mem;
-	}
+	data = devm_kzalloc(&client->dev,
+			    sizeof(struct mcs_touchkey_data) + sizeof(data->keycodes[0]) * (pdata->key_maxval + 1),
+			    GFP_KERNEL);
+	input_dev = devm_input_allocate_device(&client->dev);
+	if (!data || !input_dev)
+		return -ENOMEM;
 
 	data->client = client;
 	data->input_dev = input_dev;
@@ -143,7 +144,7 @@ static int mcs_touchkey_probe(struct i2c_client *client,
 	if (fw_ver < 0) {
 		error = fw_ver;
 		dev_err(&client->dev, "i2c read error[%d]\n", error);
-		goto err_free_mem;
+		return error;
 	}
 	dev_info(&client->dev, "Firmware version: %d\n", fw_ver);
 
@@ -174,41 +175,27 @@ static int mcs_touchkey_probe(struct i2c_client *client,
 	if (pdata->poweron) {
 		data->poweron = pdata->poweron;
 		data->poweron(true);
+		error = devm_add_action_or_reset(&client->dev,
+						 mcs_touchkey_probe_poweroff_cb,
+						 data);
+		if (error)
+			return error;
 	}
 
-	error = request_threaded_irq(client->irq, NULL, mcs_touchkey_interrupt,
-				     IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-				     client->dev.driver->name, data);
+	error = devm_request_threaded_irq(&client->dev, client->irq, NULL,
+					  mcs_touchkey_interrupt,
+					  IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+					  client->dev.driver->name, data);
 	if (error) {
 		dev_err(&client->dev, "Failed to register interrupt\n");
-		goto err_free_mem;
+		return error;
 	}
 
 	error = input_register_device(input_dev);
 	if (error)
-		goto err_free_irq;
+		return error;
 
 	i2c_set_clientdata(client, data);
-	return 0;
-
-err_free_irq:
-	free_irq(client->irq, data);
-err_free_mem:
-	input_free_device(input_dev);
-	kfree(data);
-	return error;
-}
-
-static int mcs_touchkey_remove(struct i2c_client *client)
-{
-	struct mcs_touchkey_data *data = i2c_get_clientdata(client);
-
-	free_irq(client->irq, data);
-	if (data->poweron)
-		data->poweron(false);
-	input_unregister_device(data->input_dev);
-	kfree(data);
-
 	return 0;
 }
 
@@ -268,7 +255,6 @@ static struct i2c_driver mcs_touchkey_driver = {
 		.pm	= &mcs_touchkey_pm_ops,
 	},
 	.probe		= mcs_touchkey_probe,
-	.remove		= mcs_touchkey_remove,
 	.shutdown       = mcs_touchkey_shutdown,
 	.id_table	= mcs_touchkey_id,
 };
