@@ -175,10 +175,8 @@ static int nspire_keypad_probe(struct platform_device *pdev)
 
 	keypad = devm_kzalloc(&pdev->dev, sizeof(struct nspire_keypad),
 			      GFP_KERNEL);
-	if (!keypad) {
-		dev_err(&pdev->dev, "failed to allocate keypad memory\n");
+	if (!keypad)
 		return -ENOMEM;
-	}
 
 	keypad->row_shift = get_count_order(KEYPAD_BITMASK_COLS);
 
@@ -248,8 +246,6 @@ static int nspire_keypad_probe(struct platform_device *pdev)
 			"unable to register input device: %d\n", error);
 		return error;
 	}
-
-	platform_set_drvdata(pdev, keypad);
 
 	dev_dbg(&pdev->dev,
 		"TI-NSPIRE keypad at %pR (scan_interval=%uus, row_delay=%uus%s)\n",
