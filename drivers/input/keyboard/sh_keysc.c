@@ -172,29 +172,25 @@ static int sh_keysc_probe(struct platform_device *pdev)
 
 	if (!dev_get_platdata(&pdev->dev)) {
 		dev_err(&pdev->dev, "no platform data defined\n");
-		error = -EINVAL;
-		goto err0;
+		return -EINVAL;
 	}
 
 	error = -ENXIO;
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (res == NULL) {
 		dev_err(&pdev->dev, "failed to get I/O memory\n");
-		goto err0;
+		return error;
 	}
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0) {
 		dev_err(&pdev->dev, "failed to get irq\n");
-		goto err0;
+		return error;
 	}
 
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
-	if (priv == NULL) {
-		dev_err(&pdev->dev, "failed to allocate driver data\n");
-		error = -ENOMEM;
-		goto err0;
-	}
+	if (priv == NULL)
+		return -ENOMEM;
 
 	platform_set_drvdata(pdev, priv);
 	memcpy(&priv->pdata, dev_get_platdata(&pdev->dev), sizeof(priv->pdata));
@@ -266,7 +262,6 @@ static int sh_keysc_probe(struct platform_device *pdev)
 	iounmap(priv->iomem_base);
  err1:
 	kfree(priv);
- err0:
 	return error;
 }
 
