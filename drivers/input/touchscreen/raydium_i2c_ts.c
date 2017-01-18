@@ -741,11 +741,7 @@ static int raydium_i2c_do_update_firmware(struct raydium_data *ts,
 
 	fw_checksum = raydium_calc_chksum(fw->data, fw->size);
 
-	error = raydium_i2c_write_checksum(client, fw->size, fw_checksum);
-	if (error)
-		return error;
-
-	return 0;
+	return raydium_i2c_write_checksum(client, fw->size, fw_checksum);
 }
 
 static int raydium_i2c_fw_update(struct raydium_data *ts)
@@ -831,12 +827,12 @@ static irqreturn_t raydium_i2c_irq(int irq, void *_dev)
 	u16 calc_crc;
 
 	if (ts->boot_mode != RAYDIUM_TS_MAIN)
-		goto out;
+		return IRQ_HANDLED;
 
 	error = raydium_i2c_read_message(ts->client, ts->data_bank_addr,
 					 ts->report_data, ts->pkg_size);
 	if (error)
-		goto out;
+		return IRQ_HANDLED;
 
 	fw_crc = get_unaligned_le16(&ts->report_data[ts->report_size]);
 	calc_crc = raydium_calc_chksum(ts->report_data, ts->report_size);
@@ -844,12 +840,11 @@ static irqreturn_t raydium_i2c_irq(int irq, void *_dev)
 		dev_warn(&ts->client->dev,
 			 "%s: invalid packet crc %#04x vs %#04x\n",
 			 __func__, calc_crc, fw_crc);
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	raydium_mt_event(ts);
 
-out:
 	return IRQ_HANDLED;
 }
 
@@ -1130,10 +1125,9 @@ static int raydium_i2c_probe(struct i2c_client *client,
 		return error;
 	}
 
-	error = devm_add_action(&client->dev,
-				raydium_i2c_remove_sysfs_group, ts);
+	error = devm_add_action_or_reset(&client->dev,
+					 raydium_i2c_remove_sysfs_group, ts);
 	if (error) {
-		raydium_i2c_remove_sysfs_group(ts);
 		dev_err(&client->dev,
 			"Failed to add sysfs cleanup action: %d\n", error);
 		return error;
