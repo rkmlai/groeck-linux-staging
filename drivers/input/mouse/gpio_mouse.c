@@ -55,14 +55,12 @@ static int gpio_mouse_probe(struct platform_device *pdev)
 
 	if (!pdata) {
 		dev_err(&pdev->dev, "no platform data\n");
-		error = -ENXIO;
-		goto out;
+		return -ENXIO;
 	}
 
 	if (pdata->scan_ms < 0) {
 		dev_err(&pdev->dev, "invalid scan time\n");
-		error = -EINVAL;
-		goto out;
+		return -EINVAL;
 	}
 
 	for (i = 0; i < GPIO_MOUSE_PIN_MAX; i++) {
@@ -82,7 +80,8 @@ static int gpio_mouse_probe(struct platform_device *pdev)
 				dev_dbg(&pdev->dev, "no left button defined\n");
 
 		} else {
-			error = gpio_request(pin, "gpio_mouse");
+			error = devm_gpio_request(&pdev->dev, pin,
+						  "gpio_mouse");
 			if (error) {
 				dev_err(&pdev->dev, "fail %d pin (%d idx)\n",
 					pin, i);
@@ -93,14 +92,11 @@ static int gpio_mouse_probe(struct platform_device *pdev)
 		}
 	}
 
-	input_poll = input_allocate_polled_device();
+	input_poll = devm_input_allocate_polled_device(&pdev->dev);
 	if (!input_poll) {
-		dev_err(&pdev->dev, "not enough memory for input device\n");
 		error = -ENOMEM;
 		goto out_free_gpios;
 	}
-
-	platform_set_drvdata(pdev, input_poll);
 
 	/* set input-polldev handlers */
 	input_poll->private = pdata;
@@ -124,7 +120,7 @@ static int gpio_mouse_probe(struct platform_device *pdev)
 	error = input_register_polled_device(input_poll);
 	if (error) {
 		dev_err(&pdev->dev, "could not register input device\n");
-		goto out_free_polldev;
+		goto out_free_gpios;
 	}
 
 	dev_dbg(&pdev->dev, "%d ms scan time, buttons: %s%s%s\n",
@@ -135,40 +131,15 @@ static int gpio_mouse_probe(struct platform_device *pdev)
 
 	return 0;
 
- out_free_polldev:
-	input_free_polled_device(input_poll);
-
  out_free_gpios:
 	while (--i >= 0) {
 		pin = pdata->pins[i];
-		if (pin)
-			gpio_free(pin);
 	}
- out:
 	return error;
-}
-
-static int gpio_mouse_remove(struct platform_device *pdev)
-{
-	struct input_polled_dev *input = platform_get_drvdata(pdev);
-	struct gpio_mouse_platform_data *pdata = input->private;
-	int pin, i;
-
-	input_unregister_polled_device(input);
-	input_free_polled_device(input);
-
-	for (i = 0; i < GPIO_MOUSE_PIN_MAX; i++) {
-		pin = pdata->pins[i];
-		if (pin >= 0)
-			gpio_free(pin);
-	}
-
-	return 0;
 }
 
 static struct platform_driver gpio_mouse_device_driver = {
 	.probe		= gpio_mouse_probe,
-	.remove		= gpio_mouse_remove,
 	.driver		= {
 		.name	= "gpio_mouse",
 	}
