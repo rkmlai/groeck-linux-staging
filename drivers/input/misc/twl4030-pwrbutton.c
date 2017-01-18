@@ -59,10 +59,8 @@ static int twl4030_pwrbutton_probe(struct platform_device *pdev)
 	int err;
 
 	pwr = devm_input_allocate_device(&pdev->dev);
-	if (!pwr) {
-		dev_err(&pdev->dev, "Can't allocate power button\n");
+	if (!pwr)
 		return -ENOMEM;
-	}
 
 	pwr->evbit[0] = BIT_MASK(EV_KEY);
 	pwr->keybit[BIT_WORD(KEY_POWER)] = BIT_MASK(KEY_POWER);
@@ -85,7 +83,6 @@ static int twl4030_pwrbutton_probe(struct platform_device *pdev)
 		return err;
 	}
 
-	platform_set_drvdata(pdev, pwr);
 	device_init_wakeup(&pdev->dev, true);
 
 	return 0;
