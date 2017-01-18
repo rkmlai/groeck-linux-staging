@@ -411,7 +411,7 @@ static irqreturn_t mrstouch_pendet_irq(int irq, void *dev_id)
 	 */
 
 	if (tsdev->read_prepare(tsdev))
-		goto out;
+		return IRQ_HANDLED;
 
 	do {
 		if (tsdev->read(tsdev, &x, &y, &z))
@@ -422,7 +422,6 @@ static irqreturn_t mrstouch_pendet_irq(int irq, void *dev_id)
 
 	tsdev->read_finish(tsdev);
 
-out:
 	return IRQ_HANDLED;
 }
 
@@ -559,11 +558,7 @@ static int mrstouch_adc_init(struct mrstouch_dev *tsdev)
 	if (err)
 		return err;
 
-	err = intel_scu_ipc_update_register(PMIC_REG_MADCINT, rm, 0x03);
-	if (err)
-		return err;
-
-	return 0;
+	return intel_scu_ipc_update_register(PMIC_REG_MADCINT, rm, 0x03);
 }
 
 
@@ -583,16 +578,12 @@ static int mrstouch_probe(struct platform_device *pdev)
 
 	tsdev = devm_kzalloc(&pdev->dev, sizeof(struct mrstouch_dev),
 			     GFP_KERNEL);
-	if (!tsdev) {
-		dev_err(&pdev->dev, "unable to allocate memory\n");
+	if (!tsdev)
 		return -ENOMEM;
-	}
 
 	input = devm_input_allocate_device(&pdev->dev);
-	if (!input) {
-		dev_err(&pdev->dev, "unable to allocate input device\n");
+	if (!input)
 		return -ENOMEM;
-	}
 
 	tsdev->dev = &pdev->dev;
 	tsdev->input = input;
