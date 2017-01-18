@@ -303,7 +303,7 @@ static int drv2667_init(struct drv2667_data *haptics)
 	if (error) {
 		dev_err(&haptics->client->dev, "Failed to set page: %d\n",
 			error);
-		goto error_out;
+		return error;
 	}
 
 	error = drv2667_set_waveform_freq(haptics);
@@ -320,12 +320,10 @@ static int drv2667_init(struct drv2667_data *haptics)
 		return error;
 	}
 
-	error = regmap_write(haptics->regmap, DRV2667_PAGE, DRV2667_PAGE_0);
-	return error;
+	return regmap_write(haptics->regmap, DRV2667_PAGE, DRV2667_PAGE_0);
 
 error_page:
 	regmap_write(haptics->regmap, DRV2667_PAGE, DRV2667_PAGE_0);
-error_out:
 	return error;
 }
 
@@ -358,10 +356,8 @@ static int drv2667_probe(struct i2c_client *client,
 	}
 
 	haptics->input_dev = devm_input_allocate_device(&client->dev);
-	if (!haptics->input_dev) {
-		dev_err(&client->dev, "Failed to allocate input device\n");
+	if (!haptics->input_dev)
 		return -ENOMEM;
-	}
 
 	haptics->input_dev->name = "drv2667:haptics";
 	haptics->input_dev->dev.parent = client->dev.parent;
