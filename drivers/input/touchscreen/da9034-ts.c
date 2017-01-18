@@ -301,14 +301,11 @@ static int da9034_touch_probe(struct platform_device *pdev)
 	struct da9034_touch_pdata *pdata = dev_get_platdata(&pdev->dev);
 	struct da9034_touch *touch;
 	struct input_dev *input_dev;
-	int error;
 
 	touch = devm_kzalloc(&pdev->dev, sizeof(struct da9034_touch),
 			     GFP_KERNEL);
-	if (!touch) {
-		dev_err(&pdev->dev, "failed to allocate driver data\n");
+	if (!touch)
 		return -ENOMEM;
-	}
 
 	touch->da9034_dev = pdev->dev.parent;
 
@@ -325,10 +322,8 @@ static int da9034_touch_probe(struct platform_device *pdev)
 	touch->notifier.notifier_call = da9034_touch_notifier;
 
 	input_dev = devm_input_allocate_device(&pdev->dev);
-	if (!input_dev) {
-		dev_err(&pdev->dev, "failed to allocate input device\n");
+	if (!input_dev)
 		return -ENOMEM;
-	}
 
 	input_dev->name		= pdev->name;
 	input_dev->open		= da9034_touch_open;
@@ -347,11 +342,7 @@ static int da9034_touch_probe(struct platform_device *pdev)
 	touch->input_dev = input_dev;
 	input_set_drvdata(input_dev, touch);
 
-	error = input_register_device(input_dev);
-	if (error)
-		return error;
-
-	return 0;
+	return input_register_device(input_dev);
 }
 
 static struct platform_driver da9034_touch_driver = {
