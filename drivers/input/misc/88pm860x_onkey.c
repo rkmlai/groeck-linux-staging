@@ -79,10 +79,8 @@ static int pm860x_onkey_probe(struct platform_device *pdev)
 	info->irq = irq;
 
 	info->idev = devm_input_allocate_device(&pdev->dev);
-	if (!info->idev) {
-		dev_err(chip->dev, "Failed to allocate input dev\n");
+	if (!info->idev)
 		return -ENOMEM;
-	}
 
 	info->idev->name = "88pm860x_on";
 	info->idev->phys = "88pm860x_on/input0";
