@@ -1166,9 +1166,9 @@ static int rohm_bu21023_i2c_probe(struct i2c_client *client,
 		return error;
 	}
 
-	error = devm_request_threaded_irq(dev, client->irq,
-					  NULL, rohm_ts_soft_irq,
-					  IRQF_ONESHOT, client->name, ts);
+	error = devm_request_threaded_irq(dev, client->irq, NULL,
+					  rohm_ts_soft_irq, IRQF_ONESHOT,
+					  client->name, ts);
 	if (error) {
 		dev_err(dev, "failed to request IRQ: %d\n", error);
 		return error;
@@ -1186,11 +1186,9 @@ static int rohm_bu21023_i2c_probe(struct i2c_client *client,
 		return error;
 	}
 
-	error = devm_add_action(dev, rohm_ts_remove_sysfs_group, dev);
+	error = devm_add_action_or_reset(dev, rohm_ts_remove_sysfs_group, dev);
 	if (error) {
-		rohm_ts_remove_sysfs_group(dev);
-		dev_err(&client->dev,
-			"Failed to add sysfs cleanup action: %d\n",
+		dev_err(dev, "Failed to add sysfs cleanup action: %d\n",
 			error);
 		return error;
 	}
