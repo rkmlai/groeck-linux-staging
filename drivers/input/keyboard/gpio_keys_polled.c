@@ -252,17 +252,13 @@ static int gpio_keys_polled_probe(struct platform_device *pdev)
 
 	size = sizeof(struct gpio_keys_polled_dev) +
 			pdata->nbuttons * sizeof(struct gpio_keys_button_data);
-	bdev = devm_kzalloc(&pdev->dev, size, GFP_KERNEL);
-	if (!bdev) {
-		dev_err(dev, "no memory for private data\n");
+	bdev = devm_kzalloc(dev, size, GFP_KERNEL);
+	if (!bdev)
 		return -ENOMEM;
-	}
 
-	poll_dev = devm_input_allocate_polled_device(&pdev->dev);
-	if (!poll_dev) {
-		dev_err(dev, "no memory for polled device\n");
+	poll_dev = devm_input_allocate_polled_device(dev);
+	if (!poll_dev)
 		return -ENOMEM;
-	}
 
 	poll_dev->private = bdev;
 	poll_dev->poll = gpio_keys_polled_poll;
@@ -317,7 +313,8 @@ static int gpio_keys_polled_probe(struct platform_device *pdev)
 
 			error = gpiod_direction_input(bdata->gpiod);
 			if (error) {
-				dev_err(dev, "Failed to configure GPIO %d as input: %d\n",
+				dev_err(dev,
+					"Failed to configure GPIO %d as input: %d\n",
 					desc_to_gpio(bdata->gpiod), error);
 				fwnode_handle_put(child);
 				return error;
@@ -332,8 +329,9 @@ static int gpio_keys_polled_probe(struct platform_device *pdev)
 			if (button->active_low)
 				flags |= GPIOF_ACTIVE_LOW;
 
-			error = devm_gpio_request_one(&pdev->dev, button->gpio,
-					flags, button->desc ? : DRV_NAME);
+			error = devm_gpio_request_one(dev, button->gpio,
+						      flags,
+						      button->desc ? : DRV_NAME);
 			if (error) {
 				dev_err(dev,
 					"unable to claim gpio %u, err=%d\n",
@@ -365,7 +363,6 @@ static int gpio_keys_polled_probe(struct platform_device *pdev)
 	bdev->poll_dev = poll_dev;
 	bdev->dev = dev;
 	bdev->pdata = pdata;
-	platform_set_drvdata(pdev, bdev);
 
 	error = input_register_polled_device(poll_dev);
 	if (error) {
