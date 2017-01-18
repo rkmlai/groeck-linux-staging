@@ -61,10 +61,8 @@ static int opencores_kbd_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	input = devm_input_allocate_device(&pdev->dev);
-	if (!input) {
-		dev_err(&pdev->dev, "failed to allocate input device\n");
+	if (!input)
 		return -ENOMEM;
-	}
 
 	opencores_kbd->input = input;
 
@@ -111,8 +109,6 @@ static int opencores_kbd_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "unable to register input device\n");
 		return error;
 	}
-
-	platform_set_drvdata(pdev, opencores_kbd);
 
 	return 0;
 }
