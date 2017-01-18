@@ -175,10 +175,10 @@ static int __init mc13783_ts_probe(struct platform_device *pdev)
 	struct input_dev *idev;
 	int ret = -ENOMEM;
 
-	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
-	idev = input_allocate_device();
+	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
+	idev = devm_input_allocate_device(&pdev->dev);
 	if (!priv || !idev)
-		goto err_free_mem;
+		return ret;
 
 	INIT_DELAYED_WORK(&priv->work, mc13783_ts_work);
 	priv->mc13xxx = dev_get_drvdata(pdev->dev.parent);
@@ -186,8 +186,7 @@ static int __init mc13783_ts_probe(struct platform_device *pdev)
 	priv->touch = dev_get_platdata(&pdev->dev);
 	if (!priv->touch) {
 		dev_err(&pdev->dev, "missing platform data\n");
-		ret = -ENODEV;
-		goto err_free_mem;
+		return -ENODEV;
 	}
 
 	idev->name = MC13783_TS_NAME;
@@ -208,30 +207,13 @@ static int __init mc13783_ts_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(&pdev->dev,
 			"register input device failed with %d\n", ret);
-		goto err_free_mem;
+		return ret;
 	}
-
-	platform_set_drvdata(pdev, priv);
-	return 0;
-
-err_free_mem:
-	input_free_device(idev);
-	kfree(priv);
-	return ret;
-}
-
-static int mc13783_ts_remove(struct platform_device *pdev)
-{
-	struct mc13783_ts_priv *priv = platform_get_drvdata(pdev);
-
-	input_unregister_device(priv->idev);
-	kfree(priv);
 
 	return 0;
 }
 
 static struct platform_driver mc13783_ts_driver = {
-	.remove		= mc13783_ts_remove,
 	.driver		= {
 		.name	= MC13783_TS_NAME,
 	},
