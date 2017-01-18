@@ -1002,12 +1002,12 @@ static irqreturn_t wdt87xx_ts_interrupt(int irq, void *dev_id)
 	error = i2c_master_recv(client, raw_buf, WDT_V1_RAW_BUF_COUNT);
 	if (error < 0) {
 		dev_err(&client->dev, "read v1 raw data failed: %d\n", error);
-		goto irq_exit;
+		return IRQ_HANDLED;
 	}
 
 	fingers = raw_buf[TOUCH_PK_V1_OFFSET_FNGR_NUM];
 	if (!fingers)
-		goto irq_exit;
+		return IRQ_HANDLED;
 
 	for (i = 0; i < WDT_MAX_FINGER; i++)
 		wdt87xx_report_contact(wdt->input,
@@ -1018,7 +1018,6 @@ static irqreturn_t wdt87xx_ts_interrupt(int irq, void *dev_id)
 	input_mt_sync_frame(wdt->input);
 	input_sync(wdt->input);
 
-irq_exit:
 	return IRQ_HANDLED;
 }
 
@@ -1030,10 +1029,8 @@ static int wdt87xx_ts_create_input_device(struct wdt87xx_data *wdt)
 	int error;
 
 	input = devm_input_allocate_device(dev);
-	if (!input) {
-		dev_err(dev, "failed to allocate input device\n");
+	if (!input)
 		return -ENOMEM;
-	}
 	wdt->input = input;
 
 	input->name = "WDT87xx Touchscreen";
