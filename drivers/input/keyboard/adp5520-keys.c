@@ -91,10 +91,8 @@ static int adp5520_keys_probe(struct platform_device *pdev)
 		return -EINVAL;
 
 	dev = devm_kzalloc(&pdev->dev, sizeof(*dev), GFP_KERNEL);
-	if (!dev) {
-		dev_err(&pdev->dev, "failed to alloc memory\n");
+	if (!dev)
 		return -ENOMEM;
-	}
 
 	input = devm_input_allocate_device(&pdev->dev);
 	if (!input)
