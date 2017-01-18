@@ -470,15 +470,9 @@ static int pmic8xxx_kp_enable(struct pmic8xxx_kp *kp)
 
 static int pmic8xxx_kp_disable(struct pmic8xxx_kp *kp)
 {
-	int rc;
-
 	kp->ctrl_reg &= ~KEYP_CTRL_KEYP_EN;
 
-	rc = regmap_write(kp->regmap, KEYP_CTRL, kp->ctrl_reg);
-	if (rc < 0)
-		return rc;
-
-	return rc;
+	return regmap_write(kp->regmap, KEYP_CTRL, kp->ctrl_reg);
 }
 
 static int pmic8xxx_kp_open(struct input_dev *dev)
@@ -546,10 +540,8 @@ static int pmic8xxx_kp_probe(struct platform_device *pdev)
 	kp->dev		= &pdev->dev;
 
 	kp->input = devm_input_allocate_device(&pdev->dev);
-	if (!kp->input) {
-		dev_err(&pdev->dev, "unable to allocate input device\n");
+	if (!kp->input)
 		return -ENOMEM;
-	}
 
 	kp->key_sense_irq = platform_get_irq(pdev, 0);
 	if (kp->key_sense_irq < 0) {
