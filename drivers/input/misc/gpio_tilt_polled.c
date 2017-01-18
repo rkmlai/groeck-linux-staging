@@ -95,6 +95,11 @@ static void gpio_tilt_polled_close(struct input_polled_dev *dev)
 		pdata->disable(tdev->dev);
 }
 
+static void gpio_tilt_polled_probe_gpio_free_cb(void *_pdata) {
+	const struct gpio_tilt_platform_data *pdata = _pdata;
+	gpio_free_array(pdata->gpios, pdata->nr_gpios);
+}
+
 static int gpio_tilt_polled_probe(struct platform_device *pdev)
 {
 	const struct gpio_tilt_platform_data *pdata =
@@ -108,25 +113,27 @@ static int gpio_tilt_polled_probe(struct platform_device *pdev)
 	if (!pdata || !pdata->poll_interval)
 		return -EINVAL;
 
-	tdev = kzalloc(sizeof(struct gpio_tilt_polled_dev), GFP_KERNEL);
-	if (!tdev) {
-		dev_err(dev, "no memory for private data\n");
+	tdev = devm_kzalloc(dev, sizeof(struct gpio_tilt_polled_dev),
+			    GFP_KERNEL);
+	if (!tdev)
 		return -ENOMEM;
-	}
 
 	error = gpio_request_array(pdata->gpios, pdata->nr_gpios);
 	if (error) {
-		dev_err(dev,
-			"Could not request tilt GPIOs: %d\n", error);
-		goto err_free_tdev;
+		dev_err(dev, "Could not request tilt GPIOs: %d\n", error);
+		return error;
+	}
+	error = devm_add_action_or_reset(dev,
+					 gpio_tilt_polled_probe_gpio_free_cb,
+					 (void *)pdata);
+	if (error) {
+		dev_err(dev, "Could not request tilt GPIOs: %d\n", error);
+		return error;
 	}
 
-	poll_dev = input_allocate_polled_device();
-	if (!poll_dev) {
-		dev_err(dev, "no memory for polled device\n");
-		error = -ENOMEM;
-		goto err_free_gpios;
-	}
+	poll_dev = devm_input_allocate_polled_device(dev);
+	if (!poll_dev)
+		return -ENOMEM;
 
 	poll_dev->private = tdev;
 	poll_dev->poll = gpio_tilt_polled_poll;
@@ -138,7 +145,7 @@ static int gpio_tilt_polled_probe(struct platform_device *pdev)
 
 	input->name = pdev->name;
 	input->phys = DRV_NAME"/input0";
-	input->dev.parent = &pdev->dev;
+	input->dev.parent = dev;
 
 	input->id.bustype = BUS_HOST;
 	input->id.vendor = 0x0001;
@@ -162,41 +169,14 @@ static int gpio_tilt_polled_probe(struct platform_device *pdev)
 	if (error) {
 		dev_err(dev, "unable to register polled device, err=%d\n",
 			error);
-		goto err_free_polldev;
+		return error;
 	}
-
-	platform_set_drvdata(pdev, tdev);
-
-	return 0;
-
-err_free_polldev:
-	input_free_polled_device(poll_dev);
-err_free_gpios:
-	gpio_free_array(pdata->gpios, pdata->nr_gpios);
-err_free_tdev:
-	kfree(tdev);
-
-	return error;
-}
-
-static int gpio_tilt_polled_remove(struct platform_device *pdev)
-{
-	struct gpio_tilt_polled_dev *tdev = platform_get_drvdata(pdev);
-	const struct gpio_tilt_platform_data *pdata = tdev->pdata;
-
-	input_unregister_polled_device(tdev->poll_dev);
-	input_free_polled_device(tdev->poll_dev);
-
-	gpio_free_array(pdata->gpios, pdata->nr_gpios);
-
-	kfree(tdev);
 
 	return 0;
 }
 
 static struct platform_driver gpio_tilt_polled_driver = {
 	.probe	= gpio_tilt_polled_probe,
-	.remove	= gpio_tilt_polled_remove,
 	.driver	= {
 		.name	= DRV_NAME,
 	},
