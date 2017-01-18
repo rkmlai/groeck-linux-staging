@@ -136,24 +136,32 @@ static void pcap_ts_close(struct input_dev *dev)
 				pcap_ts->read_state << PCAP_ADC_TS_M_SHIFT);
 }
 
+static void pcap_ts_probe_work_cb(void *w) {
+	cancel_delayed_work_sync(w);
+}
+
 static int pcap_ts_probe(struct platform_device *pdev)
 {
 	struct input_dev *input_dev;
 	struct pcap_ts *pcap_ts;
 	int err = -ENOMEM;
 
-	pcap_ts = kzalloc(sizeof(*pcap_ts), GFP_KERNEL);
+	pcap_ts = devm_kzalloc(&pdev->dev, sizeof(*pcap_ts), GFP_KERNEL);
 	if (!pcap_ts)
 		return err;
 
 	pcap_ts->pcap = dev_get_drvdata(pdev->dev.parent);
 	platform_set_drvdata(pdev, pcap_ts);
 
-	input_dev = input_allocate_device();
+	input_dev = devm_input_allocate_device(&pdev->dev);
 	if (!input_dev)
-		goto fail;
+		return err;
 
 	INIT_DELAYED_WORK(&pcap_ts->work, pcap_ts_work);
+	err = devm_add_action_or_reset(&pdev->dev, pcap_ts_probe_work_cb,
+				       &pcap_ts->work);
+	if (err)
+		return err;
 
 	pcap_ts->read_state = PCAP_ADC_TS_M_NONTS;
 	pcap_set_ts_bits(pcap_ts->pcap,
@@ -181,38 +189,14 @@ static int pcap_ts_probe(struct platform_device *pdev)
 
 	err = input_register_device(pcap_ts->input);
 	if (err)
-		goto fail_allocate;
+		return err;
 
-	err = request_irq(pcap_to_irq(pcap_ts->pcap, PCAP_IRQ_TS),
-			pcap_ts_event_touch, 0, "Touch Screen", pcap_ts);
-	if (err)
-		goto fail_register;
-
-	return 0;
-
-fail_register:
-	input_unregister_device(input_dev);
-	goto fail;
-fail_allocate:
-	input_free_device(input_dev);
-fail:
-	kfree(pcap_ts);
+	return devm_request_irq(&pdev->dev,
+				pcap_to_irq(pcap_ts->pcap, PCAP_IRQ_TS),
+				pcap_ts_event_touch, 0, "Touch Screen",
+				pcap_ts);
 
 	return err;
-}
-
-static int pcap_ts_remove(struct platform_device *pdev)
-{
-	struct pcap_ts *pcap_ts = platform_get_drvdata(pdev);
-
-	free_irq(pcap_to_irq(pcap_ts->pcap, PCAP_IRQ_TS), pcap_ts);
-	cancel_delayed_work_sync(&pcap_ts->work);
-
-	input_unregister_device(pcap_ts->input);
-
-	kfree(pcap_ts);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM
@@ -244,7 +228,6 @@ static const struct dev_pm_ops pcap_ts_pm_ops = {
 
 static struct platform_driver pcap_ts_driver = {
 	.probe		= pcap_ts_probe,
-	.remove		= pcap_ts_remove,
 	.driver		= {
 		.name	= "pcap-ts",
 		.pm	= PCAP_TS_PM_OPS,
