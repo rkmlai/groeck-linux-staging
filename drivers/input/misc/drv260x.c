@@ -537,10 +537,8 @@ static int drv260x_probe(struct i2c_client *client,
 		return PTR_ERR(haptics->enable_gpio);
 
 	haptics->input_dev = devm_input_allocate_device(dev);
-	if (!haptics->input_dev) {
-		dev_err(&client->dev, "Failed to allocate input device\n");
+	if (!haptics->input_dev)
 		return -ENOMEM;
-	}
 
 	haptics->input_dev->name = "drv260x:haptics";
 	haptics->input_dev->close = drv260x_close;
