@@ -82,10 +82,9 @@ static irqreturn_t egalax_ts_interrupt(int irq, void *dev_id)
 	if (ret < 0)
 		return IRQ_HANDLED;
 
-	if (buf[0] != REPORT_MODE_MTTOUCH) {
+	if (buf[0] != REPORT_MODE_MTTOUCH)
 		/* ignore mouse events and vendor events */
 		return IRQ_HANDLED;
-	}
 
 	state = buf[1];
 	x = (buf[3] << 8) | buf[2];
@@ -155,13 +154,8 @@ static int egalax_wake_up_device(struct i2c_client *client)
 static int egalax_firmware_version(struct i2c_client *client)
 {
 	static const u8 cmd[MAX_I2C_DATA_LEN] = { 0x03, 0x03, 0xa, 0x01, 0x41 };
-	int ret;
 
-	ret = i2c_master_send(client, cmd, MAX_I2C_DATA_LEN);
-	if (ret < 0)
-		return ret;
-
-	return 0;
+	return i2c_master_send(client, cmd, MAX_I2C_DATA_LEN);
 }
 
 static int egalax_ts_probe(struct i2c_client *client,
@@ -172,10 +166,8 @@ static int egalax_ts_probe(struct i2c_client *client,
 	int error;
 
 	ts = devm_kzalloc(&client->dev, sizeof(struct egalax_ts), GFP_KERNEL);
-	if (!ts) {
-		dev_err(&client->dev, "Failed to allocate memory\n");
+	if (!ts)
 		return -ENOMEM;
-	}
 
 	input_dev = devm_input_allocate_device(&client->dev);
 	if (!input_dev) {
@@ -225,12 +217,7 @@ static int egalax_ts_probe(struct i2c_client *client,
 		return error;
 	}
 
-	error = input_register_device(ts->input_dev);
-	if (error)
-		return error;
-
-	i2c_set_clientdata(client, ts);
-	return 0;
+	return input_register_device(ts->input_dev);
 }
 
 static const struct i2c_device_id egalax_ts_id[] = {
