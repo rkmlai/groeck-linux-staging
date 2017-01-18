@@ -131,6 +131,10 @@ static void apbps2_close(struct serio *io)
 	iowrite32be(0, &priv->regs->ctrl);
 }
 
+static void apbps2_of_probe_serio_cb(void *mp) {
+	serio_unregister_port(mp);
+}
+
 /* Initialize one APBPS2 PS/2 core */
 static int apbps2_of_probe(struct platform_device *ofdev)
 {
@@ -140,10 +144,8 @@ static int apbps2_of_probe(struct platform_device *ofdev)
 	struct resource *res;
 
 	priv = devm_kzalloc(&ofdev->dev, sizeof(*priv), GFP_KERNEL);
-	if (!priv) {
-		dev_err(&ofdev->dev, "memory allocation failed\n");
+	if (!priv)
 		return -ENOMEM;
-	}
 
 	/* Find Device Address */
 	res = platform_get_resource(ofdev, IORESOURCE_MEM, 0);
@@ -188,19 +190,8 @@ static int apbps2_of_probe(struct platform_device *ofdev)
 	dev_info(&ofdev->dev, "irq = %d, base = 0x%p\n", irq, priv->regs);
 
 	serio_register_port(priv->io);
-
-	platform_set_drvdata(ofdev, priv);
-
-	return 0;
-}
-
-static int apbps2_of_remove(struct platform_device *of_dev)
-{
-	struct apbps2_priv *priv = platform_get_drvdata(of_dev);
-
-	serio_unregister_port(priv->io);
-
-	return 0;
+	return devm_add_action_or_reset(&ofdev->dev, apbps2_of_probe_serio_cb,
+					priv->io);
 }
 
 static const struct of_device_id apbps2_of_match[] = {
@@ -217,7 +208,6 @@ static struct platform_driver apbps2_of_driver = {
 		.of_match_table = apbps2_of_match,
 	},
 	.probe = apbps2_of_probe,
-	.remove = apbps2_of_remove,
 };
 
 module_platform_driver(apbps2_of_driver);
