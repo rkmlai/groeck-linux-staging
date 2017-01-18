@@ -223,37 +223,26 @@ static int lpc32xx_ts_probe(struct platform_device *pdev)
 		return irq;
 	}
 
-	tsc = kzalloc(sizeof(*tsc), GFP_KERNEL);
-	input = input_allocate_device();
-	if (!tsc || !input) {
-		dev_err(&pdev->dev, "failed allocating memory\n");
-		error = -ENOMEM;
-		goto err_free_mem;
-	}
+	tsc = devm_kzalloc(&pdev->dev, sizeof(*tsc), GFP_KERNEL);
+	input = devm_input_allocate_device(&pdev->dev);
+	if (!tsc || !input)
+		return -ENOMEM;
 
 	tsc->dev = input;
 	tsc->irq = irq;
 
 	size = resource_size(res);
 
-	if (!request_mem_region(res->start, size, pdev->name)) {
-		dev_err(&pdev->dev, "TSC registers are not free\n");
-		error = -EBUSY;
-		goto err_free_mem;
-	}
-
-	tsc->tsc_base = ioremap(res->start, size);
-	if (!tsc->tsc_base) {
+	tsc->tsc_base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(tsc->tsc_base)) {
 		dev_err(&pdev->dev, "Can't map memory\n");
-		error = -ENOMEM;
-		goto err_release_mem;
+		return PTR_ERR(tsc->tsc_base);
 	}
 
-	tsc->clk = clk_get(&pdev->dev, NULL);
+	tsc->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(tsc->clk)) {
 		dev_err(&pdev->dev, "failed getting clock\n");
-		error = PTR_ERR(tsc->clk);
-		goto err_unmap;
+		return PTR_ERR(tsc->clk);
 	}
 
 	input->name = MOD_NAME;
@@ -275,56 +264,21 @@ static int lpc32xx_ts_probe(struct platform_device *pdev)
 
 	input_set_drvdata(input, tsc);
 
-	error = request_irq(tsc->irq, lpc32xx_ts_interrupt,
-			    0, pdev->name, tsc);
+	error = devm_request_irq(&pdev->dev, tsc->irq, lpc32xx_ts_interrupt,
+				 0, pdev->name, tsc);
 	if (error) {
 		dev_err(&pdev->dev, "failed requesting interrupt\n");
-		goto err_put_clock;
+		return error;
 	}
 
 	error = input_register_device(input);
 	if (error) {
 		dev_err(&pdev->dev, "failed registering input device\n");
-		goto err_free_irq;
+		return error;
 	}
 
 	platform_set_drvdata(pdev, tsc);
 	device_init_wakeup(&pdev->dev, 1);
-
-	return 0;
-
-err_free_irq:
-	free_irq(tsc->irq, tsc);
-err_put_clock:
-	clk_put(tsc->clk);
-err_unmap:
-	iounmap(tsc->tsc_base);
-err_release_mem:
-	release_mem_region(res->start, size);
-err_free_mem:
-	input_free_device(input);
-	kfree(tsc);
-
-	return error;
-}
-
-static int lpc32xx_ts_remove(struct platform_device *pdev)
-{
-	struct lpc32xx_tsc *tsc = platform_get_drvdata(pdev);
-	struct resource *res;
-
-	device_init_wakeup(&pdev->dev, 0);
-	free_irq(tsc->irq, tsc);
-
-	input_unregister_device(tsc->dev);
-
-	clk_put(tsc->clk);
-
-	iounmap(tsc->tsc_base);
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	release_mem_region(res->start, resource_size(res));
-
-	kfree(tsc);
 
 	return 0;
 }
@@ -393,7 +347,6 @@ MODULE_DEVICE_TABLE(of, lpc32xx_tsc_of_match);
 
 static struct platform_driver lpc32xx_ts_driver = {
 	.probe		= lpc32xx_ts_probe,
-	.remove		= lpc32xx_ts_remove,
 	.driver		= {
 		.name	= MOD_NAME,
 		.pm	= LPC32XX_TS_PM_OPS,
