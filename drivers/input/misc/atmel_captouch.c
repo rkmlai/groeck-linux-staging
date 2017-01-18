@@ -145,7 +145,7 @@ static irqreturn_t atmel_captouch_isr(int irq, void *data)
 	error = atmel_read(capdev, REG_KEY_STATE, &new_btn, 1);
 	if (error) {
 		dev_err(dev, "failed to read button state: %d\n", error);
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	dev_dbg(dev, "%s: button state %#02x\n", __func__, new_btn);
@@ -162,7 +162,6 @@ static irqreturn_t atmel_captouch_isr(int irq, void *data)
 
 	input_sync(capdev->input);
 
-out:
 	return IRQ_HANDLED;
 }
 
@@ -191,7 +190,6 @@ static int atmel_captouch_probe(struct i2c_client *client,
 		return -ENOMEM;
 
 	capdev->client = client;
-	i2c_set_clientdata(client, capdev);
 
 	err = atmel_read(capdev, REG_KEY_STATE,
 			    &capdev->prev_btn, sizeof(capdev->prev_btn));
@@ -201,10 +199,8 @@ static int atmel_captouch_probe(struct i2c_client *client,
 	}
 
 	capdev->input = devm_input_allocate_device(dev);
-	if (!capdev->input) {
-		dev_err(dev, "failed to allocate input device\n");
+	if (!capdev->input)
 		return -ENOMEM;
-	}
 
 	capdev->input->id.bustype = BUS_I2C;
 	capdev->input->id.product = 0x880A;
