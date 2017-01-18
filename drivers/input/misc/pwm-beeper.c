@@ -99,11 +99,11 @@ static int pwm_beeper_probe(struct platform_device *pdev)
 	struct pwm_beeper *beeper;
 	int error;
 
-	beeper = kzalloc(sizeof(*beeper), GFP_KERNEL);
+	beeper = devm_kzalloc(&pdev->dev, sizeof(*beeper), GFP_KERNEL);
 	if (!beeper)
 		return -ENOMEM;
 
-	beeper->pwm = pwm_get(&pdev->dev, NULL);
+	beeper->pwm = devm_pwm_get(&pdev->dev, NULL);
 	if (IS_ERR(beeper->pwm)) {
 		dev_dbg(&pdev->dev, "unable to request PWM, trying legacy API\n");
 		beeper->pwm = pwm_request(pwm_id, "pwm beeper");
@@ -112,7 +112,7 @@ static int pwm_beeper_probe(struct platform_device *pdev)
 	if (IS_ERR(beeper->pwm)) {
 		error = PTR_ERR(beeper->pwm);
 		dev_err(&pdev->dev, "Failed to request pwm device: %d\n", error);
-		goto err_free;
+		return error;
 	}
 
 	/*
@@ -123,12 +123,9 @@ static int pwm_beeper_probe(struct platform_device *pdev)
 
 	INIT_WORK(&beeper->work, pwm_beeper_work);
 
-	beeper->input = input_allocate_device();
-	if (!beeper->input) {
-		dev_err(&pdev->dev, "Failed to allocate input device\n");
-		error = -ENOMEM;
-		goto err_pwm_free;
-	}
+	beeper->input = devm_input_allocate_device(&pdev->dev);
+	if (!beeper->input)
+		return -ENOMEM;
 	beeper->input->dev.parent = &pdev->dev;
 
 	beeper->input->name = "pwm-beeper";
@@ -149,32 +146,10 @@ static int pwm_beeper_probe(struct platform_device *pdev)
 	error = input_register_device(beeper->input);
 	if (error) {
 		dev_err(&pdev->dev, "Failed to register input device: %d\n", error);
-		goto err_input_free;
+		return error;
 	}
 
 	platform_set_drvdata(pdev, beeper);
-
-	return 0;
-
-err_input_free:
-	input_free_device(beeper->input);
-err_pwm_free:
-	pwm_free(beeper->pwm);
-err_free:
-	kfree(beeper);
-
-	return error;
-}
-
-static int pwm_beeper_remove(struct platform_device *pdev)
-{
-	struct pwm_beeper *beeper = platform_get_drvdata(pdev);
-
-	input_unregister_device(beeper->input);
-
-	pwm_free(beeper->pwm);
-
-	kfree(beeper);
 
 	return 0;
 }
@@ -211,7 +186,6 @@ MODULE_DEVICE_TABLE(of, pwm_beeper_match);
 
 static struct platform_driver pwm_beeper_driver = {
 	.probe	= pwm_beeper_probe,
-	.remove = pwm_beeper_remove,
 	.driver = {
 		.name	= "pwm-beeper",
 		.pm	= &pwm_beeper_pm_ops,
