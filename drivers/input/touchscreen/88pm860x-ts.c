@@ -59,7 +59,7 @@ static irqreturn_t pm860x_touch_handler(int irq, void *data)
 
 	ret = pm860x_bulk_read(touch->i2c, MEAS_TSIX_1, MEAS_LEN, buf);
 	if (ret < 0)
-		goto out;
+		return IRQ_HANDLED;
 
 	pen_down = buf[1] & (1 << 6);
 	x = ((buf[0] & 0xFF) << 4) | (buf[1] & 0x0F);
@@ -86,23 +86,17 @@ static irqreturn_t pm860x_touch_handler(int irq, void *data)
 	}
 	input_sync(touch->idev);
 
-out:
 	return IRQ_HANDLED;
 }
 
 static int pm860x_touch_open(struct input_dev *dev)
 {
 	struct pm860x_touch *touch = input_get_drvdata(dev);
-	int data, ret;
+	int data;
 
 	data = MEAS_PD_EN | MEAS_TSIX_EN | MEAS_TSIY_EN
 		| MEAS_TSIZ1_EN | MEAS_TSIZ2_EN;
-	ret = pm860x_set_bits(touch->i2c, MEAS_EN3, data, data);
-	if (ret < 0)
-		goto out;
-	return 0;
-out:
-	return ret;
+	return pm860x_set_bits(touch->i2c, MEAS_EN3, data, data);
 }
 
 static void pm860x_touch_close(struct input_dev *dev)
@@ -240,13 +234,9 @@ static int pm860x_touch_probe(struct platform_device *pdev)
 	if (!touch)
 		return -ENOMEM;
 
-	platform_set_drvdata(pdev, touch);
-
 	touch->idev = devm_input_allocate_device(&pdev->dev);
-	if (!touch->idev) {
-		dev_err(&pdev->dev, "Failed to allocate input device!\n");
+	if (!touch->idev)
 		return -ENOMEM;
-	}
 
 	touch->idev->name = "88pm860x-touch";
 	touch->idev->phys = "88pm860x/input0";
@@ -285,7 +275,6 @@ static int pm860x_touch_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	platform_set_drvdata(pdev, touch);
 	return 0;
 }
 
