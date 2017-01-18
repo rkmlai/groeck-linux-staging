@@ -594,7 +594,7 @@ static irqreturn_t mip4_interrupt(int irq, void *dev_id)
 	if (error) {
 		dev_err(&client->dev,
 			"Failed to read packet info: %d\n", error);
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	size = ts->buf[0] & 0x7F;
@@ -604,7 +604,7 @@ static irqreturn_t mip4_interrupt(int irq, void *dev_id)
 	/* Check size */
 	if (!size) {
 		dev_err(&client->dev, "Empty packet\n");
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	/* Read packet data */
@@ -614,7 +614,7 @@ static irqreturn_t mip4_interrupt(int irq, void *dev_id)
 	if (error) {
 		dev_err(&client->dev,
 			"Failed to read packet data: %d\n", error);
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	if (alert) {
@@ -629,7 +629,6 @@ static irqreturn_t mip4_interrupt(int irq, void *dev_id)
 		input_sync(ts->input);
 	}
 
-out:
 	return IRQ_HANDLED;
 }
 
@@ -1531,9 +1530,8 @@ static int mip4_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		return error;
 	}
 
-	error = devm_add_action(&client->dev, mip4_sysfs_remove, ts);
+	error = devm_add_action_or_reset(&client->dev, mip4_sysfs_remove, ts);
 	if (error) {
-		mip4_sysfs_remove(ts);
 		dev_err(&client->dev,
 			"Failed to install sysfs remoce action: %d\n", error);
 		return error;
