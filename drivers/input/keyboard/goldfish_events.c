@@ -172,11 +172,7 @@ static int events_probe(struct platform_device *pdev)
 	if (error)
 		return error;
 
-	error = input_register_device(input_dev);
-	if (error)
-		return error;
-
-	return 0;
+	return input_register_device(input_dev);
 }
 
 static const struct of_device_id goldfish_events_of_match[] = {
