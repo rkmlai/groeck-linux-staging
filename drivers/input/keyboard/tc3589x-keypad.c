@@ -176,10 +176,8 @@ static int tc3589x_keypad_init_key_hardware(struct tc_keypad *keypad)
 	if (ret < 0)
 		return ret;
 
-	ret = tc3589x_reg_write(tc3589x, TC3589x_IOPULLCFG2_LSB,
-			TC3589x_PULLUP_ALL_MASK);
-
-	return ret;
+	return tc3589x_reg_write(tc3589x, TC3589x_IOPULLCFG2_LSB,
+				 TC3589x_PULLUP_ALL_MASK);
 }
 
 #define TC35893_DATA_REGS		4
@@ -396,10 +394,8 @@ static int tc3589x_keypad_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	input = devm_input_allocate_device(&pdev->dev);
-	if (!input) {
-		dev_err(&pdev->dev, "failed to allocate input device\n");
+	if (!input)
 		return -ENOMEM;
-	}
 
 	keypad->board = plat;
 	keypad->input = input;
