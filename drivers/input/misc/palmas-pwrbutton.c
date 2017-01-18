@@ -153,6 +153,10 @@ static void palmas_pwron_params_ofinit(struct device *dev,
 		 lpk_times[config->long_press_time_val]);
 }
 
+static void palmas_pwron_probe_work_cb(void *w) {
+	cancel_delayed_work_sync(w);
+}
+
 /**
  * palmas_pwron_probe() - probe
  * @pdev:	platform device for the button
@@ -171,16 +175,13 @@ static int palmas_pwron_probe(struct platform_device *pdev)
 
 	palmas_pwron_params_ofinit(dev, &config);
 
-	pwron = kzalloc(sizeof(*pwron), GFP_KERNEL);
+	pwron = devm_kzalloc(dev, sizeof(*pwron), GFP_KERNEL);
 	if (!pwron)
 		return -ENOMEM;
 
-	input_dev = input_allocate_device();
-	if (!input_dev) {
-		dev_err(dev, "Can't allocate power button\n");
-		error = -ENOMEM;
-		goto err_free_mem;
-	}
+	input_dev = devm_input_allocate_device(dev);
+	if (!input_dev)
+		return -ENOMEM;
 
 	input_dev->name = "palmas_pwron";
 	input_dev->phys = "palmas_pwron/input0";
@@ -201,61 +202,35 @@ static int palmas_pwron_probe(struct platform_device *pdev)
 				   val);
 	if (error) {
 		dev_err(dev, "LONG_PRESS_KEY_UPDATE failed: %d\n", error);
-		goto err_free_input;
+		return error;
 	}
 
 	pwron->palmas = palmas;
 	pwron->input_dev = input_dev;
 
 	INIT_DELAYED_WORK(&pwron->input_work, palmas_power_button_work);
+	error = devm_add_action_or_reset(dev, palmas_pwron_probe_work_cb,
+					 &pwron->input_work);
+	if (error)
+		return error;
 
 	pwron->irq = platform_get_irq(pdev, 0);
-	error = request_threaded_irq(pwron->irq, NULL, pwron_irq,
-				     IRQF_TRIGGER_HIGH |
-					IRQF_TRIGGER_LOW |
-					IRQF_ONESHOT,
-				     dev_name(dev), pwron);
+	error = devm_request_threaded_irq(dev, pwron->irq, NULL, pwron_irq,
+					  IRQF_TRIGGER_HIGH | IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+					  dev_name(dev), pwron);
 	if (error) {
 		dev_err(dev, "Can't get IRQ for pwron: %d\n", error);
-		goto err_free_input;
+		return error;
 	}
 
 	error = input_register_device(input_dev);
 	if (error) {
 		dev_err(dev, "Can't register power button: %d\n", error);
-		goto err_free_irq;
+		return error;
 	}
 
 	platform_set_drvdata(pdev, pwron);
 	device_init_wakeup(dev, true);
-
-	return 0;
-
-err_free_irq:
-	cancel_delayed_work_sync(&pwron->input_work);
-	free_irq(pwron->irq, pwron);
-err_free_input:
-	input_free_device(input_dev);
-err_free_mem:
-	kfree(pwron);
-	return error;
-}
-
-/**
- * palmas_pwron_remove() - Cleanup on removal
- * @pdev:	platform device for the button
- *
- * Return: 0
- */
-static int palmas_pwron_remove(struct platform_device *pdev)
-{
-	struct palmas_pwron *pwron = platform_get_drvdata(pdev);
-
-	free_irq(pwron->irq, pwron);
-	cancel_delayed_work_sync(&pwron->input_work);
-
-	input_unregister_device(pwron->input_dev);
-	kfree(pwron);
 
 	return 0;
 }
@@ -314,7 +289,6 @@ MODULE_DEVICE_TABLE(of, of_palmas_pwr_match);
 
 static struct platform_driver palmas_pwron_driver = {
 	.probe	= palmas_pwron_probe,
-	.remove	= palmas_pwron_remove,
 	.driver	= {
 		.name	= "palmas_pwrbutton",
 		.of_match_table = of_match_ptr(of_palmas_pwr_match),
