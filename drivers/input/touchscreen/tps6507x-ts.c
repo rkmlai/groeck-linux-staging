@@ -70,7 +70,7 @@ static s32 tps6507x_adc_conversion(struct tps6507x_ts *tsc,
 	ret = tps6507x_write_u8(tsc, TPS6507X_REG_TSCMODE, tsc_mode);
 	if (ret) {
 		dev_err(tsc->dev, "TSC mode read failed\n");
-		goto err;
+		return ret;
 	}
 
 	/* Start A/D conversion */
@@ -87,14 +87,14 @@ static s32 tps6507x_adc_conversion(struct tps6507x_ts *tsc,
 				       &adc_status);
 		if (ret) {
 			dev_err(tsc->dev, "ADC config read failed\n");
-			goto err;
+			return ret;
 		}
 	} while (adc_status & TPS6507X_ADCONFIG_START_CONVERSION);
 
 	ret = tps6507x_read_u8(tsc, TPS6507X_REG_ADRESULT_2, &result);
 	if (ret) {
 		dev_err(tsc->dev, "ADC result 2 read failed\n");
-		goto err;
+		return ret;
 	}
 
 	*value = (result & TPS6507X_REG_ADRESULT_2_MASK) << 8;
@@ -102,14 +102,13 @@ static s32 tps6507x_adc_conversion(struct tps6507x_ts *tsc,
 	ret = tps6507x_read_u8(tsc, TPS6507X_REG_ADRESULT_1, &result);
 	if (ret) {
 		dev_err(tsc->dev, "ADC result 1 read failed\n");
-		goto err;
+		return ret;
 	}
 
 	*value |= result;
 
 	dev_dbg(tsc->dev, "TSC channel %d = 0x%X\n", tsc_mode, *value);
 
-err:
 	return ret;
 }
 
@@ -226,11 +225,9 @@ static int tps6507x_ts_probe(struct platform_device *pdev)
 	 */
 	init_data = tps_board->tps6507x_ts_init_data;
 
-	tsc = kzalloc(sizeof(struct tps6507x_ts), GFP_KERNEL);
-	if (!tsc) {
-		dev_err(tps6507x_dev->dev, "failed to allocate driver data\n");
+	tsc = devm_kzalloc(&pdev->dev, sizeof(struct tps6507x_ts), GFP_KERNEL);
+	if (!tsc)
 		return -ENOMEM;
-	}
 
 	tsc->mfd = tps6507x_dev;
 	tsc->dev = tps6507x_dev->dev;
@@ -240,12 +237,9 @@ static int tps6507x_ts_probe(struct platform_device *pdev)
 	snprintf(tsc->phys, sizeof(tsc->phys),
 		 "%s/input0", dev_name(tsc->dev));
 
-	poll_dev = input_allocate_polled_device();
-	if (!poll_dev) {
-		dev_err(tsc->dev, "Failed to allocate polled input device.\n");
-		error = -ENOMEM;
-		goto err_free_mem;
-	}
+	poll_dev = devm_input_allocate_polled_device(&pdev->dev);
+	if (!poll_dev)
+		return -ENOMEM;
 
 	tsc->poll_dev = poll_dev;
 
@@ -274,34 +268,9 @@ static int tps6507x_ts_probe(struct platform_device *pdev)
 
 	error = tps6507x_adc_standby(tsc);
 	if (error)
-		goto err_free_polled_dev;
+		return error;
 
-	error = input_register_polled_device(poll_dev);
-	if (error)
-		goto err_free_polled_dev;
-
-	platform_set_drvdata(pdev, tsc);
-
-	return 0;
-
-err_free_polled_dev:
-	input_free_polled_device(poll_dev);
-err_free_mem:
-	kfree(tsc);
-	return error;
-}
-
-static int tps6507x_ts_remove(struct platform_device *pdev)
-{
-	struct tps6507x_ts *tsc = platform_get_drvdata(pdev);
-	struct input_polled_dev *poll_dev = tsc->poll_dev;
-
-	input_unregister_polled_device(poll_dev);
-	input_free_polled_device(poll_dev);
-
-	kfree(tsc);
-
-	return 0;
+	return input_register_polled_device(poll_dev);
 }
 
 static struct platform_driver tps6507x_ts_driver = {
@@ -309,7 +278,6 @@ static struct platform_driver tps6507x_ts_driver = {
 		.name = "tps6507x-ts",
 	},
 	.probe = tps6507x_ts_probe,
-	.remove = tps6507x_ts_remove,
 };
 module_platform_driver(tps6507x_ts_driver);
 
