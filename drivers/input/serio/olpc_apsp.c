@@ -167,6 +167,10 @@ static void olpc_apsp_close(struct serio *port)
 	}
 }
 
+static void olpc_apsp_probe_serio_cb(void *mp) {
+	serio_unregister_port(mp);
+}
+
 static int olpc_apsp_probe(struct platform_device *pdev)
 {
 	struct serio *kb_serio, *pad_serio;
@@ -212,13 +216,15 @@ static int olpc_apsp_probe(struct platform_device *pdev)
 	strlcpy(kb_serio->phys, "sp/serio0", sizeof(kb_serio->phys));
 	priv->kbio		= kb_serio;
 	serio_register_port(kb_serio);
+	error = devm_add_action_or_reset(&pdev->dev, olpc_apsp_probe_serio_cb,
+					 kb_serio);
+	if (error)
+		return error;
 
 	/* TOUCHPAD */
 	pad_serio = kzalloc(sizeof(struct serio), GFP_KERNEL);
-	if (!pad_serio) {
-		error = -ENOMEM;
-		goto err_pad;
-	}
+	if (!pad_serio)
+		return -ENOMEM;
 	pad_serio->id.type	= SERIO_8042;
 	pad_serio->write	= olpc_apsp_write;
 	pad_serio->open		= olpc_apsp_open;
@@ -229,36 +235,22 @@ static int olpc_apsp_probe(struct platform_device *pdev)
 	strlcpy(pad_serio->phys, "sp/serio1", sizeof(pad_serio->phys));
 	priv->padio		= pad_serio;
 	serio_register_port(pad_serio);
+	error = devm_add_action_or_reset(&pdev->dev, olpc_apsp_probe_serio_cb,
+					 pad_serio);
+	if (error)
+		return error;
 
-	error = request_irq(priv->irq, olpc_apsp_rx, 0, "olpc-apsp", priv);
+	error = devm_request_irq(&pdev->dev, priv->irq, olpc_apsp_rx, 0,
+				 "olpc-apsp", priv);
 	if (error) {
 		dev_err(&pdev->dev, "Failed to request IRQ\n");
-		goto err_irq;
+		return error;
 	}
 
 	priv->dev = &pdev->dev;
 	device_init_wakeup(priv->dev, 1);
-	platform_set_drvdata(pdev, priv);
 
 	dev_dbg(&pdev->dev, "probed successfully.\n");
-	return 0;
-
-err_irq:
-	serio_unregister_port(pad_serio);
-err_pad:
-	serio_unregister_port(kb_serio);
-	return error;
-}
-
-static int olpc_apsp_remove(struct platform_device *pdev)
-{
-	struct olpc_apsp *priv = platform_get_drvdata(pdev);
-
-	free_irq(priv->irq, priv);
-
-	serio_unregister_port(priv->kbio);
-	serio_unregister_port(priv->padio);
-
 	return 0;
 }
 
@@ -270,7 +262,6 @@ MODULE_DEVICE_TABLE(of, olpc_apsp_dt_ids);
 
 static struct platform_driver olpc_apsp_driver = {
 	.probe		= olpc_apsp_probe,
-	.remove		= olpc_apsp_remove,
 	.driver		= {
 		.name	= "olpc-apsp",
 		.of_match_table = olpc_apsp_dt_ids,
