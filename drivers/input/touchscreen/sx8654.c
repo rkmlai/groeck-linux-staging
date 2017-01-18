@@ -89,7 +89,7 @@ static irqreturn_t sx8654_irq(int irq, void *handle)
 	dev_dbg(&sx8654->client->dev, "irqsrc = 0x%x", irqsrc);
 
 	if (irqsrc < 0)
-		goto out;
+		return IRQ_HANDLED;
 
 	if (irqsrc & IRQ_PENRELEASE) {
 		dev_dbg(&sx8654->client->dev, "pen release interrupt");
@@ -103,11 +103,11 @@ static irqreturn_t sx8654_irq(int irq, void *handle)
 
 		retval = i2c_master_recv(sx8654->client, data, sizeof(data));
 		if (retval != sizeof(data))
-			goto out;
+			return IRQ_HANDLED;
 
 		/* invalid data */
 		if (unlikely(data[0] & 0x80 || data[2] & 0x80))
-			goto out;
+			return IRQ_HANDLED;
 
 		x = ((data[0] & 0xf) << 8) | (data[1]);
 		y = ((data[2] & 0xf) << 8) | (data[3]);
@@ -120,7 +120,6 @@ static irqreturn_t sx8654_irq(int irq, void *handle)
 		dev_dbg(&sx8654->client->dev, "point(%4d,%4d)\n", x, y);
 	}
 
-out:
 	return IRQ_HANDLED;
 }
 
@@ -249,12 +248,7 @@ static int sx8654_probe(struct i2c_client *client,
 	/* Disable the IRQ, we'll enable it in sx8654_open() */
 	disable_irq(client->irq);
 
-	error = input_register_device(sx8654->input);
-	if (error)
-		return error;
-
-	i2c_set_clientdata(client, sx8654);
-	return 0;
+	return input_register_device(sx8654->input);
 }
 
 #ifdef CONFIG_OF
