@@ -215,6 +215,10 @@ static void w90p910_close(struct input_dev *dev)
 	clk_disable(w90p910_ts->clk);
 }
 
+static void w90x900ts_probe_timer_sync_cb(void *t) {
+	del_timer_sync(t);
+}
+
 static int w90x900ts_probe(struct platform_device *pdev)
 {
 	struct w90p910_ts *w90p910_ts;
@@ -222,42 +226,33 @@ static int w90x900ts_probe(struct platform_device *pdev)
 	struct resource *res;
 	int err;
 
-	w90p910_ts = kzalloc(sizeof(struct w90p910_ts), GFP_KERNEL);
-	input_dev = input_allocate_device();
-	if (!w90p910_ts || !input_dev) {
-		err = -ENOMEM;
-		goto fail1;
-	}
+	w90p910_ts = devm_kzalloc(&pdev->dev, sizeof(struct w90p910_ts),
+				  GFP_KERNEL);
+	input_dev = devm_input_allocate_device(&pdev->dev);
+	if (!w90p910_ts || !input_dev)
+		return -ENOMEM;
 
 	w90p910_ts->input = input_dev;
 	w90p910_ts->state = TS_IDLE;
 	spin_lock_init(&w90p910_ts->lock);
 	setup_timer(&w90p910_ts->timer, w90p910_check_pen_up,
 		    (unsigned long)w90p910_ts);
+	err = devm_add_action(&pdev->dev, w90x900ts_probe_timer_sync_cb,
+			      &w90p910_ts->timer);
+	if (err)
+		return err;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!res) {
-		err = -ENXIO;
-		goto fail1;
-	}
+	if (!res)
+		return -ENXIO;
 
-	if (!request_mem_region(res->start, resource_size(res),
-				pdev->name)) {
-		err = -EBUSY;
-		goto fail1;
-	}
+	w90p910_ts->ts_reg = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(w90p910_ts->ts_reg))
+		return PTR_ERR(w90p910_ts->ts_reg);
 
-	w90p910_ts->ts_reg = ioremap(res->start, resource_size(res));
-	if (!w90p910_ts->ts_reg) {
-		err = -ENOMEM;
-		goto fail2;
-	}
-
-	w90p910_ts->clk = clk_get(&pdev->dev, NULL);
-	if (IS_ERR(w90p910_ts->clk)) {
-		err = PTR_ERR(w90p910_ts->clk);
-		goto fail3;
-	}
+	w90p910_ts->clk = devm_clk_get(&pdev->dev, NULL);
+	if (IS_ERR(w90p910_ts->clk))
+		return PTR_ERR(w90p910_ts->clk);
 
 	input_dev->name = "W90P910 TouchScreen";
 	input_dev->phys = "w90p910ts/event0";
@@ -278,52 +273,14 @@ static int w90x900ts_probe(struct platform_device *pdev)
 	input_set_drvdata(input_dev, w90p910_ts);
 
 	w90p910_ts->irq_num = platform_get_irq(pdev, 0);
-	if (request_irq(w90p910_ts->irq_num, w90p910_ts_interrupt,
-			0, "w90p910ts", w90p910_ts)) {
-		err = -EBUSY;
-		goto fail4;
-	}
+	if (devm_request_irq(&pdev->dev, w90p910_ts->irq_num, w90p910_ts_interrupt, 0, "w90p910ts", w90p910_ts))
+		return -EBUSY;
 
-	err = input_register_device(w90p910_ts->input);
-	if (err)
-		goto fail5;
-
-	platform_set_drvdata(pdev, w90p910_ts);
-
-	return 0;
-
-fail5:	free_irq(w90p910_ts->irq_num, w90p910_ts);
-fail4:	clk_put(w90p910_ts->clk);
-fail3:	iounmap(w90p910_ts->ts_reg);
-fail2:	release_mem_region(res->start, resource_size(res));
-fail1:	input_free_device(input_dev);
-	kfree(w90p910_ts);
-	return err;
-}
-
-static int w90x900ts_remove(struct platform_device *pdev)
-{
-	struct w90p910_ts *w90p910_ts = platform_get_drvdata(pdev);
-	struct resource *res;
-
-	free_irq(w90p910_ts->irq_num, w90p910_ts);
-	del_timer_sync(&w90p910_ts->timer);
-	iounmap(w90p910_ts->ts_reg);
-
-	clk_put(w90p910_ts->clk);
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	release_mem_region(res->start, resource_size(res));
-
-	input_unregister_device(w90p910_ts->input);
-	kfree(w90p910_ts);
-
-	return 0;
+	return input_register_device(w90p910_ts->input);
 }
 
 static struct platform_driver w90x900ts_driver = {
 	.probe		= w90x900ts_probe,
-	.remove		= w90x900ts_remove,
 	.driver		= {
 		.name	= "nuc900-ts",
 	},
