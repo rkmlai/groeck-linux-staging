@@ -153,11 +153,7 @@ static int da9052_ts_configure_gpio(struct da9052 *da9052)
 	if (error < 0)
 		return error;
 
-	error = da9052_reg_update(da9052, DA9052_GPIO_6_7_REG, 0x33, 0);
-	if (error < 0)
-		return error;
-
-	return 0;
+	return da9052_reg_update(da9052, DA9052_GPIO_6_7_REG, 0x33, 0);
 }
 
 static int da9052_configure_tsi(struct da9052_tsi *tsi)
@@ -180,11 +176,7 @@ static int da9052_configure_tsi(struct da9052_tsi *tsi)
 		return error;
 
 	/* Supply TSIRef through LD09 */
-	error = da9052_reg_write(tsi->da9052, DA9052_LDO9_REG, 0x59);
-	if (error < 0)
-		return error;
-
-	return 0;
+	return da9052_reg_write(tsi->da9052, DA9052_LDO9_REG, 0x59);
 }
 
 static int da9052_ts_input_open(struct input_dev *input_dev)
@@ -238,12 +230,10 @@ static int da9052_ts_probe(struct platform_device *pdev)
 	if (!da9052)
 		return -EINVAL;
 
-	tsi = kzalloc(sizeof(struct da9052_tsi), GFP_KERNEL);
-	input_dev = input_allocate_device();
-	if (!tsi || !input_dev) {
-		error = -ENOMEM;
-		goto err_free_mem;
-	}
+	tsi = devm_kzalloc(&pdev->dev, sizeof(struct da9052_tsi), GFP_KERNEL);
+	input_dev = devm_input_allocate_device(&pdev->dev);
+	if (!tsi || !input_dev)
+		return -ENOMEM;
 
 	tsi->da9052 = da9052;
 	tsi->dev = input_dev;
@@ -279,7 +269,7 @@ static int da9052_ts_probe(struct platform_device *pdev)
 	if (error) {
 		dev_err(tsi->da9052->dev,
 			"Failed to register PENDWN IRQ: %d\n", error);
-		goto err_free_mem;
+		return error;
 	}
 
 	error = da9052_request_irq(tsi->da9052, DA9052_IRQ_TSIREADY,
@@ -310,9 +300,6 @@ err_free_datardy_irq:
 	da9052_free_irq(tsi->da9052, DA9052_IRQ_TSIREADY, tsi);
 err_free_pendwn_irq:
 	da9052_free_irq(tsi->da9052, DA9052_IRQ_PENDOWN, tsi);
-err_free_mem:
-	kfree(tsi);
-	input_free_device(input_dev);
 
 	return error;
 }
@@ -325,9 +312,6 @@ static int  da9052_ts_remove(struct platform_device *pdev)
 
 	da9052_free_irq(tsi->da9052, DA9052_IRQ_TSIREADY, tsi);
 	da9052_free_irq(tsi->da9052, DA9052_IRQ_PENDOWN, tsi);
-
-	input_unregister_device(tsi->dev);
-	kfree(tsi);
 
 	return 0;
 }
