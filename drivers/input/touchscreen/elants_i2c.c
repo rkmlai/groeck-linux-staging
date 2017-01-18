@@ -867,7 +867,7 @@ static irqreturn_t elants_i2c_irq(int irq, void *_dev)
 	if (len < 0) {
 		dev_err(&client->dev, "%s: failed to read data: %d\n",
 			__func__, len);
-		goto out;
+		return IRQ_HANDLED;
 	}
 
 	dev_dbg(&client->dev, "%s: packet %*ph\n",
@@ -944,7 +944,6 @@ static irqreturn_t elants_i2c_irq(int irq, void *_dev)
 		break;
 	}
 
-out:
 	return IRQ_HANDLED;
 }
 
@@ -1225,10 +1224,8 @@ static int elants_i2c_probe(struct i2c_client *client,
 	}
 
 	ts->input = devm_input_allocate_device(&client->dev);
-	if (!ts->input) {
-		dev_err(&client->dev, "Failed to allocate input device\n");
+	if (!ts->input)
 		return -ENOMEM;
-	}
 
 	ts->input->name = "Elan Touchscreen";
 	ts->input->id.bustype = BUS_I2C;
@@ -1298,10 +1295,9 @@ static int elants_i2c_probe(struct i2c_client *client,
 		return error;
 	}
 
-	error = devm_add_action(&client->dev,
-				elants_i2c_remove_sysfs_group, ts);
+	error = devm_add_action_or_reset(&client->dev,
+					 elants_i2c_remove_sysfs_group, ts);
 	if (error) {
-		elants_i2c_remove_sysfs_group(ts);
 		dev_err(&client->dev,
 			"Failed to add sysfs cleanup action: %d\n",
 			error);
