@@ -456,10 +456,8 @@ static int iproc_ts_probe(struct platform_device *pdev)
 	}
 
 	idev = devm_input_allocate_device(&pdev->dev);
-	if (!idev) {
-		dev_err(&pdev->dev, "failed to allocate input device\n");
+	if (!idev)
 		return -ENOMEM;
-	}
 
 	priv->idev = idev;
 	priv->pen_status = PEN_UP_STATUS;
