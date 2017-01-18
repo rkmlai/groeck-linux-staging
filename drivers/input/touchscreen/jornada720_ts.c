@@ -141,11 +141,7 @@ static int jornada720_ts_probe(struct platform_device *pdev)
 		return error;
 	}
 
-	error = input_register_device(jornada_ts->dev);
-	if (error)
-		return error;
-
-	return 0;
+	return input_register_device(jornada_ts->dev);
 }
 
 /* work with hotplug and coldplug */
