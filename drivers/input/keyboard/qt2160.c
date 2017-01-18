@@ -374,6 +374,10 @@ static bool qt2160_identify(struct i2c_client *client)
 	return true;
 }
 
+static void qt2160_probe_work_cb(void *w) {
+	cancel_delayed_work_sync(w);
+}
+
 static int qt2160_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
@@ -395,17 +399,19 @@ static int qt2160_probe(struct i2c_client *client,
 		return -ENODEV;
 
 	/* Chip is valid and active. Allocate structure */
-	qt2160 = kzalloc(sizeof(struct qt2160_data), GFP_KERNEL);
-	input = input_allocate_device();
-	if (!qt2160 || !input) {
-		dev_err(&client->dev, "insufficient memory\n");
-		error = -ENOMEM;
-		goto err_free_mem;
-	}
+	qt2160 = devm_kzalloc(&client->dev, sizeof(struct qt2160_data),
+			      GFP_KERNEL);
+	input = devm_input_allocate_device(&client->dev);
+	if (!qt2160 || !input)
+		return -ENOMEM;
 
 	qt2160->client = client;
 	qt2160->input = input;
 	INIT_DELAYED_WORK(&qt2160->dwork, qt2160_worker);
+	error = devm_add_action_or_reset(&client->dev, qt2160_probe_work_cb,
+					 &qt2160->dwork);
+	if (error)
+		return error;
 	spin_lock_init(&qt2160->lock);
 
 	input->name = "AT42QT2160 Touch Sense Keyboard";
@@ -427,23 +433,24 @@ static int qt2160_probe(struct i2c_client *client,
 	error = qt2160_write(client, QT2160_CMD_CALIBRATE, 1);
 	if (error) {
 		dev_err(&client->dev, "failed to calibrate device\n");
-		goto err_free_mem;
+		return error;
 	}
 
 	if (client->irq) {
-		error = request_irq(client->irq, qt2160_irq,
-				    IRQF_TRIGGER_FALLING, "qt2160", qt2160);
+		error = devm_request_irq(&client->dev, client->irq,
+					 qt2160_irq, IRQF_TRIGGER_FALLING,
+					 "qt2160", qt2160);
 		if (error) {
 			dev_err(&client->dev,
 				"failed to allocate irq %d\n", client->irq);
-			goto err_free_mem;
+			return error;
 		}
 	}
 
 	error = qt2160_register_leds(qt2160);
 	if (error) {
 		dev_err(&client->dev, "Failed to register leds\n");
-		goto err_free_irq;
+		return error;
 	}
 
 	error = input_register_device(qt2160->input);
@@ -460,12 +467,6 @@ static int qt2160_probe(struct i2c_client *client,
 
 err_unregister_leds:
 	qt2160_unregister_leds(qt2160);
-err_free_irq:
-	if (client->irq)
-		free_irq(client->irq, qt2160);
-err_free_mem:
-	input_free_device(input);
-	kfree(qt2160);
 	return error;
 }
 
@@ -474,15 +475,6 @@ static int qt2160_remove(struct i2c_client *client)
 	struct qt2160_data *qt2160 = i2c_get_clientdata(client);
 
 	qt2160_unregister_leds(qt2160);
-
-	/* Release IRQ so no queue will be scheduled */
-	if (client->irq)
-		free_irq(client->irq, qt2160);
-
-	cancel_delayed_work_sync(&qt2160->dwork);
-
-	input_unregister_device(qt2160->input);
-	kfree(qt2160);
 
 	return 0;
 }
