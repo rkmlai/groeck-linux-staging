@@ -365,14 +365,9 @@ static int surface3_spi_probe(struct spi_device *spi)
 	if (error)
 		return error;
 
-	error = devm_request_threaded_irq(&spi->dev, spi->irq,
-					  NULL, surface3_spi_irq_handler,
-					  IRQF_ONESHOT,
-					  "Surface3-irq", data);
-	if (error)
-		return error;
-
-	return 0;
+	return devm_request_threaded_irq(&spi->dev, spi->irq, NULL,
+					 surface3_spi_irq_handler,
+					 IRQF_ONESHOT, "Surface3-irq", data);
 }
 
 static int __maybe_unused surface3_spi_suspend(struct device *dev)
