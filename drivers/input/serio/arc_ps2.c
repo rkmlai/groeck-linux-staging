@@ -197,10 +197,8 @@ static int arc_ps2_probe(struct platform_device *pdev)
 
 	arc_ps2 = devm_kzalloc(&pdev->dev, sizeof(struct arc_ps2_data),
 				GFP_KERNEL);
-	if (!arc_ps2) {
-		dev_err(&pdev->dev, "out of memory\n");
+	if (!arc_ps2)
 		return -ENOMEM;
-	}
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	arc_ps2->addr = devm_ioremap_resource(&pdev->dev, res);
