@@ -117,9 +117,13 @@ static int gp2a_initialize(struct gp2a_data *dt)
 	if (error < 0)
 		return error;
 
-	error = gp2a_disable(dt);
+	return gp2a_disable(dt);
+}
 
-	return error;
+static void gp2a_probe_shutdown_cb(void *_c) {
+	struct i2c_client *c = _c;
+	const struct gp2a_platform_data *pdata = dev_get_platdata(&c->dev);
+	pdata->hw_shutdown(c);
 }
 
 static int gp2a_probe(struct i2c_client *client,
@@ -137,29 +141,33 @@ static int gp2a_probe(struct i2c_client *client,
 		if (error < 0)
 			return error;
 	}
-
-	error = gpio_request_one(pdata->vout_gpio, GPIOF_IN, GP2A_I2C_NAME);
-	if (error)
-		goto err_hw_shutdown;
-
-	dt = kzalloc(sizeof(struct gp2a_data), GFP_KERNEL);
-	if (!dt) {
-		error = -ENOMEM;
-		goto err_free_gpio;
+	if (pdata->hw_shutdown) {
+		error = devm_add_action_or_reset(&client->dev,
+						 gp2a_probe_shutdown_cb,
+						 client);
+		if (error)
+			return error;
 	}
+
+	error = devm_gpio_request_one(&client->dev, pdata->vout_gpio,
+				      GPIOF_IN, GP2A_I2C_NAME);
+	if (error)
+		return error;
+
+	dt = devm_kzalloc(&client->dev, sizeof(struct gp2a_data), GFP_KERNEL);
+	if (!dt)
+		return -ENOMEM;
 
 	dt->pdata = pdata;
 	dt->i2c_client = client;
 
 	error = gp2a_initialize(dt);
 	if (error < 0)
-		goto err_free_mem;
+		return error;
 
-	dt->input = input_allocate_device();
-	if (!dt->input) {
-		error = -ENOMEM;
-		goto err_free_mem;
-	}
+	dt->input = devm_input_allocate_device(&client->dev);
+	if (!dt->input)
+		return -ENOMEM;
 
 	input_set_drvdata(dt->input, dt);
 
@@ -171,56 +179,23 @@ static int gp2a_probe(struct i2c_client *client,
 
 	input_set_capability(dt->input, EV_SW, SW_FRONT_PROXIMITY);
 
-	error = request_threaded_irq(client->irq, NULL, gp2a_irq,
-			IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING |
-				IRQF_ONESHOT,
-			GP2A_I2C_NAME, dt);
+	error = devm_request_threaded_irq(&client->dev, client->irq, NULL,
+					  gp2a_irq,
+					  IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+					  GP2A_I2C_NAME, dt);
 	if (error) {
 		dev_err(&client->dev, "irq request failed\n");
-		goto err_free_input_dev;
+		return error;
 	}
 
 	error = input_register_device(dt->input);
 	if (error) {
 		dev_err(&client->dev, "device registration failed\n");
-		goto err_free_irq;
+		return error;
 	}
 
 	device_init_wakeup(&client->dev, pdata->wakeup);
 	i2c_set_clientdata(client, dt);
-
-	return 0;
-
-err_free_irq:
-	free_irq(client->irq, dt);
-err_free_input_dev:
-	input_free_device(dt->input);
-err_free_mem:
-	kfree(dt);
-err_free_gpio:
-	gpio_free(pdata->vout_gpio);
-err_hw_shutdown:
-	if (pdata->hw_shutdown)
-		pdata->hw_shutdown(client);
-	return error;
-}
-
-static int gp2a_remove(struct i2c_client *client)
-{
-	struct gp2a_data *dt = i2c_get_clientdata(client);
-	const struct gp2a_platform_data *pdata = dt->pdata;
-
-	device_init_wakeup(&client->dev, false);
-
-	free_irq(client->irq, dt);
-
-	input_unregister_device(dt->input);
-	kfree(dt);
-
-	gpio_free(pdata->vout_gpio);
-
-	if (pdata->hw_shutdown)
-		pdata->hw_shutdown(client);
 
 	return 0;
 }
@@ -275,7 +250,6 @@ static struct i2c_driver gp2a_i2c_driver = {
 		.pm	= &gp2a_pm,
 	},
 	.probe		= gp2a_probe,
-	.remove		= gp2a_remove,
 	.id_table	= gp2a_i2c_id,
 };
 
