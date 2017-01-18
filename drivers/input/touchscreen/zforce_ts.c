@@ -722,10 +722,8 @@ static struct zforce_ts_platdata *zforce_parse_dt(struct device *dev)
 		return ERR_PTR(-ENOENT);
 
 	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
-	if (!pdata) {
-		dev_err(dev, "failed to allocate platform data\n");
+	if (!pdata)
 		return ERR_PTR(-ENOMEM);
-	}
 
 	if (of_property_read_u32(np, "x-size", &pdata->x_max)) {
 		dev_err(dev, "failed to get x-size property\n");
@@ -836,10 +834,8 @@ static int zforce_probe(struct i2c_client *client,
 		 "%s/input0", dev_name(&client->dev));
 
 	input_dev = devm_input_allocate_device(&client->dev);
-	if (!input_dev) {
-		dev_err(&client->dev, "could not allocate input device\n");
+	if (!input_dev)
 		return -ENOMEM;
-	}
 
 	mutex_init(&ts->access_mutex);
 	mutex_init(&ts->command_mutex);
