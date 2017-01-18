@@ -138,10 +138,8 @@ static int imx_snvs_pwrkey_probe(struct platform_device *pdev)
 		    imx_imx_snvs_check_for_events, (unsigned long) pdata);
 
 	input = devm_input_allocate_device(&pdev->dev);
-	if (!input) {
-		dev_err(&pdev->dev, "failed to allocate the input device\n");
+	if (!input)
 		return -ENOMEM;
-	}
 
 	input->name = pdev->name;
 	input->phys = "snvs-pwrkey/input0";
