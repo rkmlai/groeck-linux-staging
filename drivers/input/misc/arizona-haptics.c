@@ -175,10 +175,8 @@ static int arizona_haptics_probe(struct platform_device *pdev)
 	INIT_WORK(&haptics->work, arizona_haptics_work);
 
 	haptics->input_dev = devm_input_allocate_device(&pdev->dev);
-	if (!haptics->input_dev) {
-		dev_err(arizona->dev, "Failed to allocate input device\n");
+	if (!haptics->input_dev)
 		return -ENOMEM;
-	}
 
 	input_set_drvdata(haptics->input_dev, haptics);
 
@@ -200,8 +198,6 @@ static int arizona_haptics_probe(struct platform_device *pdev)
 			ret);
 		return ret;
 	}
-
-	platform_set_drvdata(pdev, haptics);
 
 	return 0;
 }
