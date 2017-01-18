@@ -215,11 +215,9 @@ static int __init amikbd_probe(struct platform_device *pdev)
 	struct input_dev *dev;
 	int i, err;
 
-	dev = input_allocate_device();
-	if (!dev) {
-		dev_err(&pdev->dev, "Not enough memory for input device\n");
+	dev = devm_input_allocate_device(&pdev->dev);
+	if (!dev)
 		return -ENOMEM;
-	}
 
 	dev->name = pdev->name;
 	dev->phys = "amikbd/input0";
@@ -237,35 +235,15 @@ static int __init amikbd_probe(struct platform_device *pdev)
 	amikbd_init_console_keymaps();
 
 	ciaa.cra &= ~0x41;	 /* serial data in, turn off TA */
-	err = request_irq(IRQ_AMIGA_CIAA_SP, amikbd_interrupt, 0, "amikbd",
-			  dev);
+	err = devm_request_irq(&pdev->dev, IRQ_AMIGA_CIAA_SP,
+			       amikbd_interrupt, 0, "amikbd", dev);
 	if (err)
-		goto fail2;
+		return err;
 
-	err = input_register_device(dev);
-	if (err)
-		goto fail3;
-
-	platform_set_drvdata(pdev, dev);
-
-	return 0;
-
- fail3:	free_irq(IRQ_AMIGA_CIAA_SP, dev);
- fail2:	input_free_device(dev);
-	return err;
-}
-
-static int __exit amikbd_remove(struct platform_device *pdev)
-{
-	struct input_dev *dev = platform_get_drvdata(pdev);
-
-	free_irq(IRQ_AMIGA_CIAA_SP, dev);
-	input_unregister_device(dev);
-	return 0;
+	return input_register_device(dev);
 }
 
 static struct platform_driver amikbd_driver = {
-	.remove = __exit_p(amikbd_remove),
 	.driver   = {
 		.name	= "amiga-keyboard",
 	},
