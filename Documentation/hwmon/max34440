@@ -16,6 +16,11 @@ Supported chips:
     Prefixes: 'max34446'
     Addresses scanned: -
     Datasheet: http://datasheets.maximintegrated.com/en/ds/MAX34446.pdf
+  * Maxim MAX34451
+    PMBus 16-Channel V/I Monitor and 12-Channel Sequencer/Marginer
+    Datasheet: https://datasheets.maximintegrated.com/en/ds/MAX34451.pdf
+    Prefixes: 'max34451'
+    Addresses scanned: -
   * Maxim MAX34460
     PMBus 12-Channel Voltage Monitor & Sequencer
     Prefix: 'max34460'
@@ -36,9 +41,9 @@ Description
 This driver supports hardware monitoring for Maxim MAX34440 PMBus 6-Channel
 Power-Supply Manager, MAX34441 PMBus 5-Channel Power-Supply Manager
 and Intelligent Fan Controller, and MAX34446 PMBus Power-Supply Data Logger.
-It also supports the MAX34460 and MAX34461 PMBus Voltage Monitor & Sequencers.
-The MAX34460 supports 12 voltage channels, and the MAX34461 supports 16 voltage
-channels.
+It also supports the MAX34451, MAX34460, and MAX34461 PMBus Voltage Monitor
+& Sequencers. The MAX34460 supports 12 voltage channels; the MAX34451 and
+MAX34461 support 16 channels.
 
 The driver is a client driver to the core PMBus driver. Please see
 Documentation/hwmon/pmbus for details on PMBus client drivers.

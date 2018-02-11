@@ -27,7 +27,7 @@
 #include <linux/i2c.h>
 #include "pmbus.h"
 
-enum chips { max34440, max34441, max34446, max34460, max34461 };
+enum chips { max34440, max34441, max34446, max34451, max34460, max34461 };
 
 #define MAX34440_MFR_VOUT_PEAK		0xd4
 #define MAX34440_MFR_IOUT_PEAK		0xd5
@@ -38,6 +38,8 @@ enum chips { max34440, max34441, max34446, max34460, max34461 };
 #define MAX34446_MFR_POUT_AVG		0xe1
 #define MAX34446_MFR_IOUT_AVG		0xe2
 #define MAX34446_MFR_TEMPERATURE_AVG	0xe3
+
+#define MAX34451_MFR_CHANNEL_CONFIG	0xe4
 
 #define MAX34440_STATUS_OC_WARN		BIT(0)
 #define MAX34440_STATUS_OC_FAULT	BIT(1)
@@ -67,7 +69,7 @@ static int max34440_read_word_data(struct i2c_client *client, int page, int reg)
 					   MAX34440_MFR_VOUT_PEAK);
 		break;
 	case PMBUS_VIRT_READ_IOUT_AVG:
-		if (data->id != max34446)
+		if (data->id != max34446 && data->id != max34451)
 			return -ENXIO;
 		ret = pmbus_read_word_data(client, page,
 					   MAX34446_MFR_IOUT_AVG);
@@ -165,6 +167,8 @@ static int max34440_write_word_data(struct i2c_client *client, int page,
 
 static int max34440_read_byte_data(struct i2c_client *client, int page, int reg)
 {
+	const struct pmbus_driver_info *info = pmbus_get_driver_info(client);
+	const struct max34440_data *data = to_max34440_data(info);
 	int ret = 0;
 	int mfg_status;
 
@@ -176,6 +180,8 @@ static int max34440_read_byte_data(struct i2c_client *client, int page, int reg)
 
 	switch (reg) {
 	case PMBUS_STATUS_IOUT:
+		if (data->id == max34451)
+			return -ENODATA;
 		mfg_status = pmbus_read_word_data(client, 0,
 						  PMBUS_STATUS_MFR_SPECIFIC);
 		if (mfg_status < 0)
@@ -186,6 +192,9 @@ static int max34440_read_byte_data(struct i2c_client *client, int page, int reg)
 			ret |= PB_IOUT_OC_FAULT;
 		break;
 	case PMBUS_STATUS_TEMPERATURE:
+		if (data->id == max34451 || data->id == max34460 ||
+		    data->id == max34461)
+			return -ENODATA;
 		mfg_status = pmbus_read_word_data(client, 0,
 						  PMBUS_STATUS_MFR_SPECIFIC);
 		if (mfg_status < 0)
@@ -325,6 +334,29 @@ static struct pmbus_driver_info max34440_info[] = {
 		.read_word_data = max34440_read_word_data,
 		.write_word_data = max34440_write_word_data,
 	},
+	[max34451] = {
+		.pages = 21,
+		.format[PSC_VOLTAGE_OUT] = direct,
+		.format[PSC_CURRENT_OUT] = direct,
+		.format[PSC_TEMPERATURE] = direct,
+		.m[PSC_VOLTAGE_OUT] = 1,
+		.b[PSC_VOLTAGE_OUT] = 0,
+		.R[PSC_VOLTAGE_OUT] = 3,
+		.m[PSC_CURRENT_OUT] = 1,
+		.b[PSC_CURRENT_OUT] = 0,
+		.R[PSC_CURRENT_OUT] = 3,
+		.m[PSC_TEMPERATURE] = 1,
+		.b[PSC_TEMPERATURE] = 0,
+		.R[PSC_TEMPERATURE] = 2,
+		.func[16] = PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP,
+		.func[17] = PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP,
+		.func[18] = PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP,
+		.func[19] = PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP,
+		.func[20] = PMBUS_HAVE_TEMP | PMBUS_HAVE_STATUS_TEMP,
+		.read_byte_data = max34440_read_byte_data,
+		.read_word_data = max34440_read_word_data,
+		.write_word_data = max34440_write_word_data,
+	},
 	[max34460] = {
 		.pages = 18,
 		.format[PSC_VOLTAGE_OUT] = direct,
@@ -398,6 +430,7 @@ static int max34440_probe(struct i2c_client *client,
 			  const struct i2c_device_id *id)
 {
 	struct max34440_data *data;
+	int page, rv;
 
 	data = devm_kzalloc(&client->dev, sizeof(struct max34440_data),
 			    GFP_KERNEL);
@@ -406,6 +439,37 @@ static int max34440_probe(struct i2c_client *client,
 	data->id = id->driver_data;
 	data->info = max34440_info[id->driver_data];
 
+	switch (data->id) {
+	case max34451:
+		for (page = 0; page < 16; page++) {
+			rv = pmbus_set_page(client, page);
+			if (rv < 0)
+				return rv;
+			rv = pmbus_read_word_data(client, page,
+						  MAX34451_MFR_CHANNEL_CONFIG);
+			if (rv < 0)
+				return rv;
+			switch (rv & 0x1f) {
+			case 0x10:
+			case 0x20:
+			case 0x21:
+				data->info.func[page] = PMBUS_HAVE_VOUT |
+						PMBUS_HAVE_STATUS_VOUT;
+				break;
+			case 0x22:
+			case 0x23:
+				data->info.func[page] = PMBUS_HAVE_IOUT |
+						PMBUS_HAVE_STATUS_IOUT;
+				break;
+			default:
+				break;
+			}
+		}
+		break;
+	default:
+		break;
+	}
+
 	return pmbus_do_probe(client, id, &data->info);
 }
 
@@ -413,6 +477,7 @@ static const struct i2c_device_id max34440_id[] = {
 	{"max34440", max34440},
 	{"max34441", max34441},
 	{"max34446", max34446},
+	{"max34451", max34451},
 	{"max34460", max34460},
 	{"max34461", max34461},
 	{}
